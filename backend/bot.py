@@ -23,11 +23,11 @@ from telegram.constants import ParseMode
 
 load_dotenv()
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Теперь достаем их через os.getenv
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-DATA_FILE = "backend/database.json"
-UPLOADS_DIR = "backend/uploads"
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 
 if not BOT_TOKEN:
     print("Ошибка: BOT_TOKEN не найден в .env файле!")
