@@ -6,7 +6,7 @@ import uuid
 
 from sqlalchemy import select, delete, update as sql_update
 from database import async_session
-from models import News, Video, Review, Schedule
+from models import News, Video, Review, Schedule, Vacancy
 from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -48,12 +48,15 @@ VIDEO_TITLE_RU = 6
 VIDEO_TITLE_KZ = 7
 VIDEO_URL = 8
 WAITING_SCHEDULE = 9
+WAITING_VACANCY_TITLE, WAITING_VACANCY_SALARY, WAITING_VACANCY_TEXT = range(10, 13)
+
 
 # === КЛАВИАТУРЫ ===
 MAIN_MENU_MARKUP = ReplyKeyboardMarkup([
     ["📅 Обновить график"],  # <--- НОВАЯ КНОПКА
     ["📰 Добавить новость", "🎥 Добавить видео"],
     ["📋 Список новостей", "📋 Список видео"],
+    ["📋 Список вакансий", "💼 Вакансии (Добавить)"],
     ["💬 Список отзывов"]
 ], resize_keyboard=True)
 
@@ -299,6 +302,67 @@ async def handle_schedule_upload(update: Update, context: ContextTypes.DEFAULT_T
             
     return CHOOSING_ACTION
 
+# === ЛОГИКА ВАКАНСИЙ ===
+
+async def start_vacancy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Показываем кнопку "Отмена" вместо удаления клавиатуры
+    await update.message.reply_text(
+        "💼 Введите название вакансии (например: Медсестра):", 
+        reply_markup=CANCEL_MARKUP
+    )
+    return WAITING_VACANCY_TITLE
+
+async def vacancy_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['vac_title'] = update.message.text
+    await update.message.reply_text(
+        "💰 Укажите зарплату (например: 200 000 тг или 'При собеседовании'):",
+        reply_markup=CANCEL_MARKUP
+    )
+    return WAITING_VACANCY_SALARY
+
+async def vacancy_salary(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['vac_salary'] = update.message.text
+    await update.message.reply_text(
+        "📝 Теперь напишите требования и описание вакансии:",
+        reply_markup=CANCEL_MARKUP
+    )
+    return WAITING_VACANCY_TEXT
+
+async def vacancy_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    
+    async with async_session() as session:
+        new_vac = Vacancy(
+            title=context.user_data['vac_title'],
+            salary=context.user_data['vac_salary'],
+            text=text,
+            date=update.message.date.strftime("%d.%m.%Y")
+        )
+        session.add(new_vac)
+        await session.commit()
+
+    # Возвращаем главное меню
+    await update.message.reply_text("✅ Вакансия опубликована!", reply_markup=MAIN_MENU_MARKUP)
+    return CHOOSING_ACTION
+
+# Функция списка (аналогична новостям)
+async def list_vacancies(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async with async_session() as session:
+        result = await session.execute(select(Vacancy).order_by(Vacancy.id.desc()))
+        items = result.scalars().all()
+
+    if not items:
+        await update.message.reply_text("📭 Вакансий нет.")
+        return CHOOSING_ACTION
+
+    await update.message.reply_text("💼 Актуальные вакансии:")
+    for v in items:
+        msg = f"🆔 {v.id}\n📌 {v.title}\n💰 {v.salary}\n📝 {v.text}"
+        keyboard = [[InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_vacancies_{v.id}")]]
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+    
+    return CHOOSING_ACTION
+
 # === СПИСКИ И КНОПКИ ===
 async def show_list(update, category, title_ru):
     async with async_session() as session:
@@ -349,7 +413,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if cat == "reviews": model = Review
             elif cat == "news": model = News
             elif cat == "videos": model = Video
-            
+            elif cat == "vacancies": model = Vacancy
             if model:
                 await session.execute(delete(model).where(model.id == iid))
                 await session.commit()
@@ -373,36 +437,48 @@ if __name__ == "__main__":
     skip_filter = filters.Regex("^⏭ Пропустить фото$")
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[
+            CommandHandler('start', start),
+            # === ДОБАВЛЕНЫ ОБРАБОТЧИКИ КНОПОК МЕНЮ ===
+            MessageHandler(filters.Regex("^💼 Вакансии"), start_vacancy),
+            MessageHandler(filters.Regex("^📋 Список вакансий"), list_vacancies),
+        ],
         states={
             CHOOSING_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, choose_action)],
+            
             WAITING_SCHEDULE: [
                 MessageHandler(filters.Document.FileExtension("xlsx"), handle_schedule_upload),
                 MessageHandler(cancel_filter, cancel)
             ],
+            
+            # --- НОВОСТИ ---
             NEWS_TITLE_RU: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, news_title_ru)],
             NEWS_TITLE_KZ: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, news_title_kz)],
             NEWS_TEXT_RU:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, news_text_ru)],
             NEWS_TEXT_KZ:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, news_text_kz)],
             
-            # В ШАГЕ ФОТО ТЕПЕРЬ ОБРАБАТЫВАЕМ ВСЁ
             NEWS_PHOTO: [
                 MessageHandler(filters.PHOTO, news_photo_handler),
-                MessageHandler(filters.Document.IMAGE, news_photo_handler), # Поддержка фото файлом
+                MessageHandler(filters.Document.IMAGE, news_photo_handler), 
                 MessageHandler(skip_filter, news_skip_photo),
-                # Если прислали что-то другое (текст) - сработает тот же news_photo_handler и вернет предупреждение
                 MessageHandler(filters.ALL & ~cancel_filter, news_photo_handler)
             ],
             
+            # --- ВИДЕО ---
             VIDEO_TITLE_RU: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, video_title_ru)],
             VIDEO_TITLE_KZ: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, video_title_kz)],
             VIDEO_URL:      [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, video_finish)],
+
+            # --- ВАКАНСИИ (УЖЕ БЫЛИ, ОСТАВЛЯЕМ) ---
+            WAITING_VACANCY_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, vacancy_title)],
+            WAITING_VACANCY_SALARY: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, vacancy_salary)],
+            WAITING_VACANCY_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, vacancy_finish)],
         },
         fallbacks=[
             CommandHandler('cancel', cancel),
             MessageHandler(cancel_filter, cancel)
         ],
-        allow_reentry=True # <-- ВАЖНО: Разрешает начать /start даже если бот завис в середине
+        allow_reentry=True
     )
     
     app.add_handler(conv_handler)

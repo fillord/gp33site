@@ -39,3 +39,11 @@ class Schedule(Base):
     wed = Column(String)
     thu = Column(String)
     fri = Column(String)
+
+class Vacancy(Base):
+    __tablename__ = "vacancies"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)       # Заголовок (напр. "Врач-терапевт")
+    text = Column(Text)          # Описание
+    salary = Column(String)      # Зарплата (напр. "от 150 000 тг")
+    date = Column(String)        # Дата публикации

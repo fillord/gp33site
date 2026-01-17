@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Eye, Search, Phone, Mail, ChevronDown, ChevronRight, Menu, X, Globe, MapPin, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Eye, Search, Phone, Mail, ChevronDown, ChevronRight, Menu, X, Globe, MapPin, Clock, FileText } from 'lucide-react';
+import { pagesData } from '../data/pagesData'; // Импортируем статические данные
 
 // === СЛОВАРЬ ===
 const translations = {
@@ -40,6 +41,10 @@ const translations = {
       corp_council: "Наблюдательный совет",
       corp_docs: "Корпоративные документы",
       corp_licenses: "Лицензии",
+      about_docs: "Документы",             // <-- Заголовок подменю
+      about_docs_normative: "Нормативные документы",
+      about_docs_archive: "Архив",
+      about_docs_protocol: "Протокола",
       blog_welcome: "Обращение главного врача",
       blog_feedback: "Подать обращение",
       press_video: "Видеогалерея",
@@ -112,6 +117,10 @@ const translations = {
       corp_council: "Бақылау кеңесі",
       corp_docs: "Корпоративтік құжаттар",
       corp_licenses: "Лицензиялар",
+      about_docs: "Құжаттар",              // <-- Заголовок подменю
+      about_docs_normative: "Нормативтік құжаттар",
+      about_docs_archive: "Мұрағат",
+      about_docs_protocol: "Хаттамалар",
       blog_welcome: "Бас дәрігердің алғысөзі",
       blog_feedback: "Өтініш беру",
       press_video: "Бейнегалерея",
@@ -150,6 +159,22 @@ const translations = {
   }
 };
 
+// Хелпер для получения ссылки по ключу из pagesData
+const getLinkByKey = (key) => {
+    if (key === 'home') return '/';
+    if (key === 'symbols') return '/symbols';
+    if (key === 'blog_welcome') return '/blog/welcome';
+    // Простая карта соответствий (можно расширять)
+    if (key.startsWith('about_')) return `/about/${key.replace('about_', '')}`;
+    if (key.startsWith('corp_')) return `/about/corp/${key.replace('corp_', '')}`;
+    if (key.startsWith('services_')) return `/services/${key.replace('services_', '')}`;
+    if (key.startsWith('pat_')) return `/patients/${key.replace('pat_', '').replace('_', '-')}`;
+    if (key === 'blog_welcome') return '/blog/welcome';
+    return '/'; // Fallback
+};
+
+const API_URL = 'http://localhost:8000';
+
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [lang, setLang] = useState('ru'); 
@@ -157,12 +182,47 @@ export default function Layout() {
   const [fontSize, setFontSize] = useState(100);
   const [isGrayscale, setIsGrayscale] = useState(false);
 
+  // === SEARCH STATE ===
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [newsData, setNewsData] = useState([]);
+  const [doctorsData, setDoctorsData] = useState([]);
+  const searchRef = useRef(null);
+  const navigate = useNavigate();
+
   const t = translations[lang];
   const location = useLocation();
 
   useEffect(() => {
     setMobileMenuOpen(false);
+    setSearchQuery(''); // Очищаем поиск при переходе
+    setSearchResults([]);
   }, [location]);
+
+  // Загружаем новости для поиска
+  useEffect(() => {
+    fetch(`${API_URL}/api/news`)
+        .then(res => res.json())
+        .then(data => setNewsData(data))
+        .catch(err => console.error("Search News Fetch Error", err));
+
+    // 2. Врачи (чтобы искать по фамилиям)
+    fetch(`${API_URL}/api/schedule`)
+        .then(res => res.json())
+        .then(data => setDoctorsData(data))
+        .catch(err => console.error("Doctors Search Error", err));
+  }, []);
+
+  // Клик вне поиска закрывает результаты
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+        if (searchRef.current && !searchRef.current.contains(event.target)) {
+            setSearchResults([]);
+        }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const containerStyle = {
     filter: isGrayscale ? 'grayscale(100%) contrast(1.2)' : 'none',
@@ -171,6 +231,67 @@ export default function Layout() {
   };
 
   const toggleLang = () => setLang(prev => prev === 'ru' ? 'kz' : 'ru');
+
+  // === ЛОГИКА ПОИСКА ===
+  const handleSearch = (e) => {
+    const query = e.target.value.toLowerCase();
+    setSearchQuery(e.target.value);
+
+    if (query.length < 2) {
+        setSearchResults([]);
+        return;
+    }
+
+    const results = [];
+
+    // 1. Ищем в pagesData (статические страницы)
+    Object.keys(pagesData).forEach(key => {
+        const page = pagesData[key][lang];
+        if (page && (page.title.toLowerCase().includes(query) || page.content.toLowerCase().includes(query))) {
+            results.push({
+                type: 'page',
+                title: page.title,
+                link: getLinkByKey(key),
+                snippet: page.content.replace(/<[^>]*>?/gm, '').substring(0, 60) + '...'
+            });
+        }
+    });
+
+    // 2. Ищем в новостях
+    newsData.forEach(item => {
+        const title = lang === 'kz' && item.titleKz ? item.titleKz : item.title;
+        const text = lang === 'kz' && item.textKz ? item.textKz : item.text;
+        
+        if (title.toLowerCase().includes(query) || text.toLowerCase().includes(query)) {
+            results.push({
+                type: 'news',
+                title: title,
+                link: '/news', // В идеале сделать ссылку на конкретную новость /news/:id
+                snippet: text.substring(0, 60) + '...'
+            });
+        }
+    });
+    // 3. Ищем ВРАЧЕЙ (Новое!)
+    doctorsData.forEach(doc => {
+        // Ищем по имени или специальности
+        if (doc.name.toLowerCase().includes(query) || doc.role.toLowerCase().includes(query)) {
+            results.push({
+                type: 'doctor',
+                title: `${doc.name} (${doc.role})`,
+                link: '/patients/doc-schedule', // Ведем на расписание
+                snippet: `Кабинет: ${doc.cabinet}`
+            });
+        }
+    });
+
+    setSearchResults(results.slice(0, 10)); // Показываем топ-10
+  };
+
+  const handleResultClick = (link) => {
+      navigate(link);
+      setSearchQuery('');
+      setSearchResults([]);
+  };
 
   return (
     <div style={containerStyle} className="min-h-screen flex flex-col font-sans text-gray-800 bg-white">
@@ -235,10 +356,48 @@ export default function Layout() {
             />
             <h1 className="text-xl md:text-2xl font-bold text-teal-800 leading-tight">{t.header.title}</h1>
           </Link>
-          <div className="hidden lg:flex relative mx-4">
-             <input type="text" placeholder={t.header.search} className="border rounded-full pl-4 pr-8 py-1 text-sm focus:ring-2 focus:ring-teal-500 outline-none"/>
-             <Search size={14} className="absolute right-3 top-2 text-gray-400"/>
+
+          {/* === ПОИСК (РАБОЧИЙ) === */}
+          <div className="hidden lg:flex relative mx-4 w-64 xl:w-80" ref={searchRef}>
+             <input 
+                type="text" 
+                placeholder={t.header.search}
+                value={searchQuery}
+                onChange={handleSearch}
+                className="w-full border rounded-full pl-4 pr-10 py-2 text-sm focus:ring-2 focus:ring-teal-500 outline-none transition shadow-sm bg-gray-50 focus:bg-white"
+             />
+             <Search size={16} className="absolute right-3 top-2.5 text-gray-400"/>
+             
+             {/* ВЫПАДАЮЩИЙ СПИСОК РЕЗУЛЬТАТОВ */}
+             {searchQuery.length >= 2 && (
+                <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-fade-in-down">
+                    {searchResults.length > 0 ? (
+                        <ul>
+                            {searchResults.map((res, idx) => (
+                                <li 
+                                    key={idx} 
+                                    onClick={() => handleResultClick(res.link)}
+                                    className="px-4 py-3 hover:bg-teal-50 cursor-pointer border-b border-gray-50 last:border-0 transition"
+                                >
+                                    <div className="font-bold text-teal-800 text-sm flex items-center">
+                                        {res.type === 'news' ? <FileText size={12} className="mr-1 opacity-50"/> : <Search size={12} className="mr-1 opacity-50"/>}
+                                        {res.title}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1 truncate">
+                                        {res.snippet}
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <div className="p-4 text-center text-gray-400 text-sm">
+                            Ничего не найдено / Ештеңе табылмады
+                        </div>
+                    )}
+                </div>
+             )}
           </div>
+
           <button className="lg:hidden text-teal-800" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
             {mobileMenuOpen ? <X size={28}/> : <Menu size={28}/>}
           </button>
@@ -265,6 +424,30 @@ export default function Layout() {
                 <li><Link to="/about/ethics" className="block px-4 py-3 hover:bg-gray-100">{t.menu.about_ethics}</Link></li>
                 <li><Link to="/about/annual" className="block px-4 py-3 hover:bg-gray-100">{t.menu.about_annual}</Link></li>
                 <li><Link to="/about/policy" className="block px-4 py-3 hover:bg-gray-100">{t.menu.about_policy}</Link></li>
+                <li className="relative group/sub hover:bg-gray-100">
+                  <span className="flex items-center justify-between px-4 py-3 text-teal-800">
+                    {t.menu.about_docs} <ChevronRight size={14}/>
+                  </span>
+                  {/* Выпадающее меню второго уровня */}
+                  <ul className="lg:absolute lg:left-full lg:top-0 bg-gray-50 text-gray-800 w-64 shadow-xl hidden group-hover/sub:block border-l-2 border-yellow-400">
+                     <li>
+                        <Link to="/about/docs/normative" className="block px-4 py-3 hover:bg-white">
+                          {t.menu.about_docs_normative}
+                        </Link>
+                     </li>
+                     <li>
+                        <Link to="/about/docs/archive" className="block px-4 py-3 hover:bg-white">
+                          {t.menu.about_docs_archive}
+                        </Link>
+                     </li>
+                     <li>
+                        <Link to="/about/docs/protocol" className="block px-4 py-3 hover:bg-white">
+                          {t.menu.about_docs_protocol}
+                        </Link>
+                     </li>
+                  </ul>
+                </li>
+                
                 <li className="relative group/sub hover:bg-gray-100">
                   <span className="flex items-center justify-between px-4 py-3 text-teal-800">{t.menu.corp_gov} <ChevronRight size={14}/></span>
                   <ul className="lg:absolute lg:left-full lg:top-0 bg-gray-50 text-gray-800 w-64 shadow-xl hidden group-hover/sub:block border-l-2 border-yellow-400">

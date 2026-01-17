@@ -15,8 +15,8 @@ export default function AboutGeneral() {
         "Расположена по адресу: город Алматы, Жетысуский район, проспект Райымбека, 263/2.",
         "Специалисты поликлиники оказывают первичную медико-санитарную помощь жителям Жетысуского района (в том числе жителям массива «Рабочий поселок»).",
         "Плановая мощность поликлиники — 240 посещений в смену.",
-        "Прикрепленное население составляет более 30 000 человек.",
-        "Штат сотрудников включает 234 высококвалифицированных специалиста (ВОП, педиатры, профильные специалисты)."
+        "Прикрепленное население составляет более 15 000 человек.",
+        "Штат сотрудников включает 110 высококвалифицированных специалиста (ВОП, педиатры, профильные специалисты)."
       ]
     },
     kz: {
@@ -27,8 +27,8 @@ export default function AboutGeneral() {
         "Орналасқан жері: Алматы қаласы, Жетісу ауданы, Райымбек даңғылы, 263/2.",
         "Емхана мамандары Жетісу ауданының тұрғындарына (соның ішінде «Жұмысшы ауылы» тұрғындарына) алғашқы медициналық-санитарлық көмек көрсетеді.",
         "Емхананың жоспарлы қуаты — ауысымына 240 келуші.",
-        "Тіркелген халық саны 30 000-нан астам адамды құрайды.",
-        "Қызметкерлер штатында 234 жоғары білікті маман (ЖТД, педиатрлар, бейінді мамандар) бар."
+        "Тіркелген халық саны 15 000-нан астам адамды құрайды.",
+        "Қызметкерлер штатында 110 жоғары білікті маман (ЖТД, педиатрлар, бейінді мамандар) бар."
       ]
     }
   };
@@ -62,19 +62,13 @@ export default function AboutGeneral() {
 
           {/* 3. SOCIAL ICONS (Как на фото внизу) */}
           <div className="mt-12 flex space-x-3">
-            <a href="#" className="w-10 h-10 bg-blue-800 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-              <Facebook size={20} />
+            <a href="https://www.instagram.com/emhana33_almaty/" className="w-10 h-10 bg-blue-800 text-white rounded flex items-center justify-center hover:opacity-80 transition">
+              <Instagram size={20} />
             </a>
-            <a href="#" className="w-10 h-10 bg-blue-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-              <span className="font-bold text-sm">VK</span>
-            </a>
-            <a href="#" className="w-10 h-10 bg-orange-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-               <span className="font-bold text-sm">OK</span>
-            </a>
-            <a href="#" className="w-10 h-10 bg-green-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
+            <a href="tel:+77273395903" className="w-10 h-10 bg-green-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
                <Phone size={20} />
             </a>
-            <a href="#" className="w-10 h-10 bg-red-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
+            <a href="mailto:priemnaya_gp33@mail.ru" className="w-10 h-10 bg-red-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
                <Mail size={20} />
             </a>
           </div>

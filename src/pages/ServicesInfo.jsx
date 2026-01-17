@@ -59,7 +59,7 @@ export default function ServicesInfo() {
         ]
       },
       
-      videoBtn: "Смотреть видео-инструкцию"
+      videoBtn: <a href="https://youtu.be/l8ckT3wFDEk" target="_blank" rel="noopener noreferrer">Смотреть видео-инструкцию</a>
     },
     kz: {
       breadcrumb: "БАСТЫ БЕТ / АҚПАРАТТЫҚ МАТЕРИАЛДАР",
@@ -109,8 +109,8 @@ export default function ServicesInfo() {
            { title: "Өзін-өзі жұмыспен қамтығандар", text: "Жүйеге минималды жарнамен кіру (айына 4 250 ₸)." }
         ]
       },
-      
-      videoBtn: "Бейне-нұсқаулықты көру"
+
+      videoBtn: <a href="https://youtu.be/l8ckT3wFDEk" target="_blank" rel="noopener noreferrer">Бейне-нұсқаулықты көру</a>
     }
   };
 

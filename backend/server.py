@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 
 # Импортируем наши новые модули
 from database import init_models, get_db
-from models import Review as ReviewModel, News as NewsModel, Video as VideoModel, Schedule as ScheduleModel
 
+from models import Review as ReviewModel, News as NewsModel, Video as VideoModel, Schedule as ScheduleModel, Vacancy as VacancyModel # <--- Добавили Vacancy
 load_dotenv()
 
 app = FastAPI()
@@ -107,4 +107,10 @@ async def get_videos(db: AsyncSession = Depends(get_db)):
 @app.get("/api/schedule")
 async def get_schedule(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ScheduleModel))
+    return result.scalars().all()
+
+# 5. ВАКАНСИИ
+@app.get("/api/vacancies")
+async def get_vacancies(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(VacancyModel).order_by(VacancyModel.id.desc()))
     return result.scalars().all()

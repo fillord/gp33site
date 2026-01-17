@@ -35,6 +35,8 @@ import ServicesHealthyLifestyle from './pages/ServicesHealthyLifestyle';
 import MediaVideo from './pages/MediaVideo';
 import News from './pages/News';
 import ServicesScreening from './pages/ServicesScreening';
+
+import ProtocolsPage from './pages/ProtocolsPage'; // <--- Импортируем
 // Наша универсальная страница для всего остального
 import UniversalPage from './pages/UniversalPage';   // <-- НОВОЕ
 
@@ -60,7 +62,10 @@ function App() {
           <Route path="about/ethics" element={<UniversalPage pageId="about_ethics" />} />
           <Route path="about/annual" element={<UniversalPage pageId="about_annual" />} />
           <Route path="about/policy" element={<AboutPolicy />} />
-          
+          <Route path="about/docs/normative" element={<UniversalPage pageId="about_docs_normative" />} />
+          <Route path="about/docs/archive" element={<UniversalPage pageId="about_docs_archive" />} />
+          <Route path="about/docs/protocol" element={<ProtocolsPage />} />
+
           <Route path="about/corp/council" element={<UniversalPage pageId="corp_council" />} />
           <Route path="about/corp/docs" element={<UniversalPage pageId="corp_docs" />} />
           <Route path="about/corp/licenses" element={<UniversalPage pageId="corp_licenses" />} />

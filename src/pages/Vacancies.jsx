@@ -1,91 +1,138 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Briefcase, Mail, Phone, FileText } from 'lucide-react';
+import { Briefcase, DollarSign, Clock, Loader, ChevronDown, ChevronUp } from 'lucide-react';
+
+const API_URL = 'http://localhost:8000';
 
 export default function Vacancies() {
   const { lang } = useOutletContext();
+  const [vacancies, setVacancies] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Состояние для хранения ID раскрытой вакансии (null - все закрыты)
+  const [expandedId, setExpandedId] = useState(null);
 
   const t = {
-    breadcrumb: lang === 'ru' ? "ГЛАВНАЯ / О ПОЛИКЛИНИКЕ / ВАКАНСИИ" : "БАСТЫ БЕТ / ЕМХАНА ТУРАЛЫ / БОС ЖҰМЫС ОРЫНДАРЫ",
     title: lang === 'ru' ? "Вакансии" : "Бос жұмыс орындары",
-    
-    // Сообщение об отсутствии
-    emptyTitle: lang === 'ru' ? "На данный момент открытых вакансий нет" : "Қазіргі уақытта бос жұмыс орындары жоқ",
-    emptyDesc: lang === 'ru' 
-      ? "Однако мы всегда рады квалифицированным специалистам. Вы можете отправить свое резюме в наш отдел кадров, и мы свяжемся с вами, как только появится подходящая позиция." 
-      : "Дегенмен, біз білікті мамандарға әрқашан қуаныштымыз. Сіз түйіндемеңізді біздің кадрлар бөліміне жібере аласыз, сәйкес бос орын пайда болған жағдайда біз сізбен байланысамыз.",
-    
-    // Контакты
-    contactTitle: lang === 'ru' ? "Куда отправлять резюме?" : "Түйіндемені қайда жіберу керек?",
-    hrEmail: "prienmaya_gp33@mail.ru",
-    hrPhone: "+7 (77) ***-**-**"
+    subtitle: lang === 'ru' 
+      ? "Присоединяйтесь к нашей команде профессионалов" 
+      : "Біздің кәсіби командамызға қосылыңыз",
+    empty: lang === 'ru' ? "На данный момент открытых вакансий нет." : "Қазіргі уақытта бос жұмыс орындары жоқ.",
+    salary: lang === 'ru' ? "Зарплата:" : "Жалақы:",
+    posted: lang === 'ru' ? "Опубликовано:" : "Жарияланды:",
+    contact: lang === 'ru' ? "Отдел кадров:" : "Кадрлар бөлімі:",
+    phone: "+7 (727) 339-59-03",
+    email: "priemnaya_gp33@mail.ru",
+    details: lang === 'ru' ? "Подробнее" : "Толығырақ"
+  };
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/vacancies`)
+      .then(res => res.json())
+      .then(data => {
+        setVacancies(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Ошибка загрузки вакансий:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  // Функция переключения (открыть/закрыть)
+  const toggleVacancy = (id) => {
+    if (expandedId === id) {
+      setExpandedId(null); // Если кликнули на уже открытую - закрываем
+    } else {
+      setExpandedId(id);   // Открываем новую
+    }
   };
 
   return (
-    <div className="flex flex-col min-h-[60vh] bg-gray-50">
-      
-      {/* 1. HEADER */}
-      <div className="bg-teal-700 text-white py-12">
-        <div className="container mx-auto px-4">
-          <div className="text-xs font-bold text-yellow-400 uppercase tracking-widest mb-2">
-            {t.breadcrumb}
-          </div>
-          <h1 className="text-3xl md:text-5xl font-bold uppercase mb-4">
-            {t.title}
-          </h1>
-        </div>
+    <div className="container mx-auto px-4 py-12">
+      {/* Заголовок */}
+      <div className="text-center mb-12">
+        <h2 className="text-3xl md:text-4xl font-bold text-teal-800 mb-4">{t.title}</h2>
+        <p className="text-gray-600 max-w-2xl mx-auto">{t.subtitle}</p>
       </div>
 
-      {/* 2. CONTENT */}
-      <div className="container mx-auto px-4 py-16">
-        
-        <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden text-center p-10 md:p-16">
-           
-           {/* Иконка чемодана */}
-           <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-400 animate-pulse">
-              <Briefcase size={48} strokeWidth={1.5} />
-           </div>
+      {/* Контактная плашка */}
+      <div className="bg-teal-50 border border-teal-100 rounded-xl p-6 mb-10 flex flex-col md:flex-row justify-between items-center text-center md:text-left">
+         <div>
+            <h4 className="font-bold text-teal-800 text-lg mb-1">{t.contact}</h4>
+            <p className="text-gray-600">Присылайте резюме на почту или звоните</p>
+         </div>
+         <div className="mt-4 md:mt-0 font-bold text-teal-700 text-lg">
+            <a href={`tel:${t.phone}`} className="mr-4 hover:underline">{t.phone}</a>
+            <a href={`mailto:${t.email}`} className="hover:underline">{t.email}</a>
+         </div>
+      </div>
 
-           <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-4">
-              {t.emptyTitle}
-           </h2>
-           
-           <p className="text-gray-600 text-lg leading-relaxed mb-10">
-              {t.emptyDesc}
-           </p>
+      {/* Список */}
+      {loading ? (
+        <div className="flex justify-center py-20"><Loader className="animate-spin text-teal-600" size={40}/></div>
+      ) : vacancies.length === 0 ? (
+        <div className="text-center py-16 bg-gray-50 rounded-xl">
+           <Briefcase className="mx-auto h-16 w-16 text-gray-300 mb-4"/>
+           <p className="text-gray-500 text-lg">{t.empty}</p>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {vacancies.map((vac) => {
+            const isOpen = expandedId === vac.id;
 
-           {/* Карточка контактов HR */}
-           <div className="bg-teal-50 rounded-xl p-8 border border-teal-100 flex flex-col items-center">
-              <h3 className="text-teal-900 font-bold mb-6 flex items-center uppercase tracking-wide text-sm">
-                 <FileText size={16} className="mr-2"/> {t.contactTitle}
-              </h3>
-              
-              <div className="flex flex-col md:flex-row gap-6 md:gap-12">
-                 <a href={`mailto:${t.hrEmail}`} className="flex items-center group">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-teal-600 shadow-sm mr-4 group-hover:scale-110 transition">
-                       <Mail size={20} />
-                    </div>
-                    <div className="text-left">
-                       <div className="text-xs text-gray-500 font-bold uppercase">E-mail</div>
-                       <div className="text-lg font-bold text-gray-800 group-hover:text-teal-600 transition">{t.hrEmail}</div>
-                    </div>
-                 </a>
+            return (
+              <div 
+                key={vac.id} 
+                onClick={() => toggleVacancy(vac.id)}
+                className={`bg-white rounded-xl border transition-all duration-300 cursor-pointer overflow-hidden
+                  ${isOpen ? 'shadow-lg border-teal-200 ring-1 ring-teal-100' : 'shadow-sm border-gray-100 hover:shadow-md'}
+                `}
+              >
+                {/* ЗАГОЛОВОК КАРТОЧКИ (Виден всегда) */}
+                <div className="p-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                   <div className="flex items-center w-full md:w-auto">
+                      <div className={`p-3 rounded-full mr-4 transition-colors ${isOpen ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-500'}`}>
+                         <Briefcase size={24} />
+                      </div>
+                      <h3 className="text-lg md:text-xl font-bold text-gray-800">
+                         {vac.title}
+                      </h3>
+                   </div>
 
-                 <div className="flex items-center">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-teal-600 shadow-sm mr-4">
-                       <Phone size={20} />
-                    </div>
-                    <div className="text-left">
-                       <div className="text-xs text-gray-500 font-bold uppercase">{lang === 'ru' ? "Отдел кадров" : "Кадрлар бөлімі"}</div>
-                       <div className="text-lg font-bold text-gray-800">{t.hrPhone}</div>
-                    </div>
-                 </div>
+                   <div className="flex items-center justify-between w-full md:w-auto gap-6">
+                      <div className="flex items-center text-green-700 font-bold bg-green-50 px-3 py-1 rounded-full whitespace-nowrap">
+                         <DollarSign size={16} className="mr-1"/>
+                         {vac.salary}
+                      </div>
+                      
+                      {/* Иконка стрелочки */}
+                      <div className="text-gray-400">
+                        {isOpen ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
+                      </div>
+                   </div>
+                </div>
+                
+                {/* СКРЫТЫЙ КОНТЕНТ (Появляется при клике) */}
+                {isOpen && (
+                  <div className="px-6 pb-6 pt-0 animate-fade-in-down">
+                     <div className="border-t border-gray-100 pt-4 mt-2">
+                        <div className="prose prose-teal max-w-none text-gray-600 mb-6 whitespace-pre-line leading-relaxed">
+                           {vac.text}
+                        </div>
+
+                        <div className="flex items-center text-gray-400 text-sm">
+                           <Clock size={16} className="mr-2"/>
+                           {t.posted} {vac.date}
+                        </div>
+                     </div>
+                  </div>
+                )}
               </div>
-           </div>
-
+            );
+          })}
         </div>
-
-      </div>
+      )}
     </div>
   );
 }

@@ -26,7 +26,7 @@ export default function ServicesSupport() {
       { ru: "Есть предложения по улучшению работы поликлиники", kz: "Емхана жұмысын жақсарту бойынша ұсыныстарыңыз болса" }
     ],
     contactsTitle: lang === 'ru' ? "Наши контакты" : "Біздің байланыстар",
-    office: lang === 'ru' ? "1 этаж, Кабинет Службы поддержки пациентов" : "1 қабат, Пациенттерді қолдау қызметінің кабинеті",
+    office: lang === 'ru' ? "1 этаж, Регистратура" : "1 қабат, Тіркеу бөлімі",
     hotline: lang === 'ru' ? "Телефон доверия:" : "Сенім телефоны:",
     formTitle: lang === 'ru' ? "Написать обращение онлайн" : "Онлайн өтініш жазу",
     formName: lang === 'ru' ? "Ваше имя" : "Сіздің атыңыз",
@@ -148,7 +148,7 @@ ${formData.message}
                           <Mail size={24} />
                        </div>
                        <div>
-                          <div className="text-lg font-medium text-gray-800">support@gp33.kz</div>
+                          <div className="text-lg font-medium text-gray-800">*********@gp33.kz</div>
                        </div>
                     </div>
                  </div>

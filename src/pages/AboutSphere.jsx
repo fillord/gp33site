@@ -78,20 +78,14 @@ export default function AboutSphere() {
 
           {/* 3. SOCIAL ICONS */}
           <div className="mt-12 flex space-x-3">
-             <a href="#" className="w-10 h-10 bg-blue-800 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-              <Facebook size={20} />
+            <a href="https://www.instagram.com/emhana33_almaty/" className="w-10 h-10 bg-blue-800 text-white rounded flex items-center justify-center hover:opacity-80 transition">
+              <Instagram size={20} />
             </a>
-            <a href="#" className="w-10 h-10 bg-blue-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-               <span className="font-bold text-sm">VK</span>
+            <a href="tel:+77273395903" className="w-10 h-10 bg-green-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
+                <Phone size={20} />
             </a>
-            <a href="#" className="w-10 h-10 bg-orange-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-               <span className="font-bold text-sm">OK</span>
-            </a>
-            <a href="#" className="w-10 h-10 bg-green-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-               <Phone size={20} />
-            </a>
-            <a href="#" className="w-10 h-10 bg-red-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-               <Mail size={20} />
+            <a href="mailto:priemnaya_gp33@mail.ru" className="w-10 h-10 bg-red-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
+                <Mail size={20} />
             </a>
           </div>
         </div>

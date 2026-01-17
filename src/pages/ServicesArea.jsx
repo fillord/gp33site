@@ -16,7 +16,7 @@ export default function ServicesArea() {
     searchPlaceholder: lang === 'ru' ? "Поиск улицы..." : "Көшені іздеу...",
     
     stats: [
-      { label: { ru: "Население", kz: "Халық саны" }, value: "30 000+" },
+      { label: { ru: "Население", kz: "Халық саны" }, value: "15 000+" },
       { label: { ru: "Участков", kz: "Учаскелер" }, value: "8" },
       { label: { ru: "Район", kz: "Аудан" }, value: { ru: "Жетысуский", kz: "Жетісу" } }
     ],

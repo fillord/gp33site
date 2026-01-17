@@ -1,6 +1,6 @@
 import React from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Facebook, Mail, MessageCircle, Phone, ExternalLink } from 'lucide-react';
+import { Facebook, Mail, MessageCircle, Phone, ExternalLink, Instagram } from 'lucide-react';
 
 export default function ServicesContact() {
   const { lang } = useOutletContext();
@@ -72,23 +72,16 @@ export default function ServicesContact() {
           {/* 3. SOCIAL ICONS */}
           <div className="flex space-x-3">
              {/* Facebook */}
-             <a href="#" className="w-10 h-10 bg-[#3b5998] text-white rounded flex items-center justify-center hover:opacity-90 transition">
-               <Facebook size={20} />
+             <a href="https://www.instagram.com/emhana33_almaty/" className="w-10 h-10 bg-[#3b5998] text-white rounded flex items-center justify-center hover:opacity-90 transition">
+                <Instagram size={20} />
              </a>
-             {/* VK */}
-             <a href="#" className="w-10 h-10 bg-[#4c75a3] text-white rounded flex items-center justify-center hover:opacity-90 transition">
-                <span className="font-bold text-xs">VK</span>
-             </a>
-             {/* OK */}
-             <a href="#" className="w-10 h-10 bg-[#ff7f00] text-white rounded flex items-center justify-center hover:opacity-90 transition">
-                <span className="font-bold text-xs">OK</span>
-             </a>
+             
              {/* Whatsapp */}
-             <a href="#" className="w-10 h-10 bg-[#25d366] text-white rounded flex items-center justify-center hover:opacity-90 transition">
+             <a href="tel:+77273395903" className="w-10 h-10 bg-[#25d366] text-white rounded flex items-center justify-center hover:opacity-90 transition">
                 <MessageCircle size={20} />
              </a>
              {/* Mail */}
-             <a href="#" className="w-10 h-10 bg-[#dd4b39] text-white rounded flex items-center justify-center hover:opacity-90 transition">
+             <a href="mailto:priemnaya_gp33@mail.ru" className="w-10 h-10 bg-[#dd4b39] text-white rounded flex items-center justify-center hover:opacity-90 transition">
                 <Mail size={20} />
              </a>
           </div>
