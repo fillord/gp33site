@@ -3,6 +3,11 @@ import logging
 import pandas as pd
 import os
 import uuid
+
+from sqlalchemy import select, delete, update as sql_update
+from database import async_session
+from models import News, Video, Review, Schedule
+from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, 
@@ -56,12 +61,7 @@ CANCEL_MARKUP = ReplyKeyboardMarkup([["❌ Отмена"]], resize_keyboard=True
 PHOTO_MARKUP = ReplyKeyboardMarkup([["⏭ Пропустить фото"], ["❌ Отмена"]], resize_keyboard=True)
 
 # === БАЗА ДАННЫХ ===
-def load_db():
-    if not os.path.exists(DATA_FILE): return {"reviews": [], "news": [], "videos": []}
-    with open(DATA_FILE, "r", encoding="utf-8") as f: return json.load(f)
 
-def save_db(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f: json.dump(data, f, ensure_ascii=False, indent=2)
 
 # === СТАРТ И ОТМЕНА ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -170,19 +170,18 @@ async def news_skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CHOOSING_ACTION
 
 async def save_news(update, context, image_path):
-    db = load_db()
-    new_id = (max([i['id'] for i in db['news']] or [0])) + 1
+    async with async_session() as session:
+        new_news = News(
+            title=context.user_data.get('n_title_ru', 'Без заголовка'),
+            titleKz=context.user_data.get('n_title_kz', 'Без заголовка'),
+            text=context.user_data.get('n_text_ru', ''),
+            textKz=context.user_data.get('n_text_kz', ''),
+            date=update.message.date.strftime("%d.%m.%Y"),
+            image=image_path
+        )
+        session.add(new_news)
+        await session.commit()
     
-    db["news"].append({
-        "id": new_id,
-        "title": context.user_data.get('n_title_ru', 'Без заголовка'),
-        "titleKz": context.user_data.get('n_title_kz', 'Без заголовка'),
-        "text": context.user_data.get('n_text_ru', ''),
-        "textKz": context.user_data.get('n_text_kz', ''),
-        "date": update.message.date.strftime("%d.%m.%Y"),
-        "image": image_path
-    })
-    save_db(db)
     await update.message.reply_text("✅ Новость опубликована!", reply_markup=MAIN_MENU_MARKUP)
 
 # === ВИДЕО (ШАГИ) ===
@@ -197,15 +196,15 @@ async def video_title_kz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return VIDEO_URL
 
 async def video_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    db = load_db()
-    new_id = (max([i['id'] for i in db['videos']] or [0])) + 1
-    db["videos"].append({
-        "id": new_id,
-        "title": context.user_data.get('v_title_ru'),
-        "titleKz": context.user_data.get('v_title_kz'),
-        "url": update.message.text
-    })
-    save_db(db)
+    async with async_session() as session:
+        new_video = Video(
+            title=context.user_data.get('v_title_ru'),
+            titleKz=context.user_data.get('v_title_kz'),
+            url=update.message.text
+        )
+        session.add(new_video)
+        await session.commit()
+
     await update.message.reply_text("✅ Видео добавлено!", reply_markup=MAIN_MENU_MARKUP)
     return CHOOSING_ACTION
 
@@ -246,7 +245,7 @@ async def handle_schedule_upload(update: Update, context: ContextTypes.DEFAULT_T
             'ФИО': 'name', 
             'Должность': 'role', 
             'Кабинет': 'cabinet',
-            'Отделение': 'dept',  # <--- ДОБАВЬТЕ ЭТУ СТРОКУ
+            'Отделение': 'dept',
             'ПН': 'mon', 'ВТ': 'tue', 'СР': 'wed', 'ЧТ': 'thu', 'ПТ': 'fri'
         }
         df.rename(columns=rename_map, inplace=True)
@@ -260,15 +259,33 @@ async def handle_schedule_upload(update: Update, context: ContextTypes.DEFAULT_T
         df = df.dropna(subset=['name'])
         df = df.fillna("-").astype(str)
         
-        schedule_data = df.to_dict(orient='records')
-        
-        # Сохраняем в базу
-        db = load_db()
-        db['schedule'] = schedule_data
-        save_db(db)
+        # === НОВАЯ ЛОГИКА СОХРАНЕНИЯ В SQLITE ===
+        async with async_session() as session:
+            # 1. Удаляем старый график полностью
+            await session.execute(delete(Schedule))
+            
+            # 2. Добавляем новых врачей
+            count = 0
+            for _, row in df.iterrows():
+                doctor = Schedule(
+                    name=str(row.get('name', '-')),
+                    role=str(row.get('role', '-')),
+                    cabinet=str(row.get('cabinet', '-')),
+                    dept=str(row.get('dept', '-')),
+                    mon=str(row.get('mon', '-')),
+                    tue=str(row.get('tue', '-')),
+                    wed=str(row.get('wed', '-')),
+                    thu=str(row.get('thu', '-')),
+                    fri=str(row.get('fri', '-'))
+                )
+                session.add(doctor)
+                count += 1
+            
+            # 3. Фиксируем изменения
+            await session.commit()
         
         await update.message.reply_text(
-            f"✅ График обновлен!\nВрачей загружено: {len(schedule_data)}", 
+            f"✅ График обновлен!\nВрачей загружено: {count}", 
             reply_markup=MAIN_MENU_MARKUP
         )
         
@@ -276,6 +293,7 @@ async def handle_schedule_upload(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text(f"❌ Ошибка: {e}")
     
     finally:
+        # Удаляем временный файл
         if os.path.exists(file_path):
             os.remove(file_path)
             
@@ -283,23 +301,29 @@ async def handle_schedule_upload(update: Update, context: ContextTypes.DEFAULT_T
 
 # === СПИСКИ И КНОПКИ ===
 async def show_list(update, category, title_ru):
-    db = load_db()
-    items = db.get(category, [])
-    if category == "reviews": items = [i for i in items if i.get("approved")]
-    
+    async with async_session() as session:
+        model = None
+        if category == "reviews": model = Review
+        elif category == "news": model = News
+        elif category == "videos": model = Video
+        
+        # Получаем последние 5
+        result = await session.execute(select(model).order_by(model.id.desc()).limit(5))
+        items = result.scalars().all()
+        
     if not items:
         await update.message.reply_text("📭 Список пуст.")
         return
         
     await update.message.reply_text(f"📂 {title_ru} (последние 5):")
-    for item in items[-5:]:
-        # Инфо
-        info = f"ID: {item['id']}\n"
-        if category == 'news': info += f"📰 {item['title']}"
-        elif category == 'videos': info += f"🎥 {item['title']}"
-        else: info += f"👤 {item['name']}: {item['text']}"
+    for item in items:
+        info = f"ID: {item.id}\n"
+        if category == 'news': info += f"📰 {item.title}"
+        elif category == 'videos': info += f"🎥 {item.title}"
+        elif category == 'reviews': info += f"👤 {item.name}: {item.text}"
         
-        keyboard = [[InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_{category}_{item['id']}")]]
+        # Важно: callback_data должен совпадать с логикой в callback_handler
+        keyboard = [[InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_{category}_{item.id}")]]
         await update.message.reply_text(info, reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -308,25 +332,29 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = query.data.split("_")
     action = parts[0]
     
-    db = load_db()
-    if action == "delete":
-        cat, iid = parts[1], int(parts[2])
-        db[cat] = [i for i in db[cat] if i["id"] != iid]
-        save_db(db)
-        await query.edit_message_text("🗑 Удалено.")
-        
-    elif action == "approve":
-        iid = int(parts[1])
-        for r in db["reviews"]:
-            if r["id"] == iid: r["approved"] = True
-        save_db(db)
-        await query.edit_message_text("✅ Одобрено.")
-        
-    elif action == "reject":
-        iid = int(parts[1])
-        db["reviews"] = [r for r in db["reviews"] if r["id"] != iid]
-        save_db(db)
-        await query.edit_message_text("❌ Отклонено.")
+    async with async_session() as session:
+        if action == "approve":
+            iid = int(parts[1])
+            # ИСПОЛЬЗУЕМ sql_update ВМЕСТО update
+            await session.execute(sql_update(Review).where(Review.id == iid).values(approved=True))
+            await session.commit()
+            await query.edit_message_text("✅ Одобрено.")
+            
+        elif action == "reject" or action == "delete":
+            # Разбираем, что удаляем (review, news или video)
+            cat = "reviews" if action == "reject" else parts[1]
+            iid = int(parts[2]) if action == "delete" else int(parts[1])
+            
+            model = None
+            if cat == "reviews": model = Review
+            elif cat == "news": model = News
+            elif cat == "videos": model = Video
+            
+            if model:
+                await session.execute(delete(model).where(model.id == iid))
+                await session.commit()
+                msg = "❌ Отклонено." if action == "reject" else "🗑 Удалено."
+                await query.edit_message_text(msg)
 
 # === ЗАПУСК ===
 if __name__ == "__main__":

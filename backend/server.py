@@ -1,122 +1,110 @@
-import json
 import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles # <--- НОВОЕ
-from pydantic import BaseModel
-from typing import Optional
 import requests
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from typing import Optional, List
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from dotenv import load_dotenv
+
+# Импортируем наши новые модули
+from database import init_models, get_db
+from models import Review as ReviewModel, News as NewsModel, Video as VideoModel, Schedule as ScheduleModel
+
+load_dotenv()
 
 app = FastAPI()
 
-# Разрешаем React
+# === БЕЗОПАСНОСТЬ (CORS) ===
+# В продакшене замените "*" на реальный домен, например ["https://gp33.kz"]
+ORIGINS = [
+    "http://localhost:5173", # Vite (локальная разработка)
+    "http://localhost:4173", # Vite preview
+    "*" # Оставьте, если не знаете точный домен, но лучше убрать перед релизом
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-load_dotenv()
-
-# Теперь достаем их через os.getenv
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID")
-
-DATA_FILE = "backend/database.json"
 UPLOADS_DIR = "backend/uploads"
-
-if not BOT_TOKEN:
-    print("Ошибка: BOT_TOKEN не найден в .env файле!")
 
 if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
 
-# === РАЗДАЧА ФАЙЛОВ ===
-# Теперь файлы из папки backend/uploads доступны по адресу http://localhost:8000/uploads/...
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 
-# Если файла нет или он пустой, создаем структуру
-def init_db():
-    if not os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump({"reviews": [], "news": [], "videos": []}, f)
-    else:
-        # Проверка целостности (если был старый файл только с отзывами)
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            try:
-                data = json.load(f)
-                if isinstance(data, list): # Если это старый формат (просто список)
-                    new_data = {"reviews": data, "news": [], "videos": []}
-                    with open(DATA_FILE, "w", encoding="utf-8") as f2:
-                        json.dump(new_data, f2, ensure_ascii=False)
-            except:
-                pass
+# При старте создаем таблицы в БД
+@app.on_event("startup")
+async def startup():
+    await init_models()
 
-init_db()
-
-# === МОДЕЛИ ДАННЫХ ===
-class Review(BaseModel):
-    id: Optional[int] = None
+# === Pydantic модели (для валидации входящих данных) ===
+class ReviewSchema(BaseModel):
     name: str
     text: str
     textKz: Optional[str] = ""
     date: str
-    approved: bool = False
 
-# === ФУНКЦИИ ===
-def load_db():
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-def save_db(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-# === API ДЛЯ САЙТА ===
+# === API ===
 
 # 1. ОТЗЫВЫ
 @app.get("/api/reviews")
-def get_reviews():
-    return [r for r in load_db()["reviews"] if r.get("approved")]
+async def get_reviews(db: AsyncSession = Depends(get_db)):
+    # Запрос: выбрать только одобренные
+    result = await db.execute(select(ReviewModel).where(ReviewModel.approved == True))
+    return result.scalars().all()
 
 @app.post("/api/reviews")
-def create_review(review: Review):
-    db = load_db()
-    new_id = (max([r["id"] for r in db["reviews"]]) if db["reviews"] else 0) + 1
-    
-    new_review = review.dict()
-    new_review["id"] = new_id
-    new_review["approved"] = False
-    
-    db["reviews"].append(new_review)
-    save_db(db)
+async def create_review(review: ReviewSchema, db: AsyncSession = Depends(get_db)):
+    # Создаем запись в БД
+    new_review = ReviewModel(
+        name=review.name,
+        text=review.text,
+        textKz=review.textKz,
+        date=review.date,
+        approved=False
+    )
+    db.add(new_review)
+    await db.commit()
+    await db.refresh(new_review)
     
     # Уведомляем админа в ТГ
-    msg_text = f"📝 Новый отзыв #{new_id}\n👤 {review.name}\n💬 {review.text}"
+    msg_text = f"📝 Новый отзыв #{new_review.id}\n👤 {review.name}\n💬 {review.text}"
     keyboard = {"inline_keyboard": [[
-            {"text": "✅ Одобрить", "callback_data": f"approve_{new_id}"},
-            {"text": "❌ Удалить", "callback_data": f"reject_{new_id}"}
+            {"text": "✅ Одобрить", "callback_data": f"approve_{new_review.id}"},
+            {"text": "❌ Удалить", "callback_data": f"reject_{new_review.id}"}
     ]]}
-    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-                  json={"chat_id": ADMIN_CHAT_ID, "text": msg_text, "reply_markup": keyboard})
-    return {"status": "ok"}
+    try:
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                    json={"chat_id": ADMIN_CHAT_ID, "text": msg_text, "reply_markup": keyboard}, timeout=5)
+    except Exception as e:
+        print(f"Ошибка отправки в ТГ: {e}")
+
+    return {"status": "ok", "id": new_review.id}
 
 # 2. НОВОСТИ
 @app.get("/api/news")
-def get_news():
-    # Возвращаем список новостей (самые новые сверху)
-    return load_db()["news"][::-1]
+async def get_news(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(NewsModel).order_by(NewsModel.id.desc()))
+    return result.scalars().all()
 
 # 3. ВИДЕО
 @app.get("/api/videos")
-def get_videos():
-    return load_db()["videos"][::-1]
+async def get_videos(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(VideoModel).order_by(VideoModel.id.desc()))
+    return result.scalars().all()
 
-# === API ГРАФИК ===
+# 4. ГРАФИК
 @app.get("/api/schedule")
-def get_schedule():
-    db = load_db()
-    # Если графика нет, вернем пустой список
-    return db.get("schedule", [])
+async def get_schedule(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ScheduleModel))
+    return result.scalars().all()
