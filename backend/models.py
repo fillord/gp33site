@@ -47,3 +47,24 @@ class Vacancy(Base):
     text = Column(Text)          # Описание
     salary = Column(String)      # Зарплата (напр. "от 150 000 тг")
     date = Column(String)        # Дата публикации
+
+class Appeal(Base):
+    __tablename__ = "appeals"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    phone = Column(String)           # Телефон (виден только админу)
+    category = Column(String)        # 'thanks', 'complaint', 'proposal'
+    text = Column(Text)
+    date = Column(String)
+    approved = Column(Boolean, default=False) # По умолчанию скрыто
+
+class Document(Base):
+    __tablename__ = "documents"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)       # Отображаемое имя (например "Отчет за 2023")
+    file_path = Column(String)   # Путь к файлу (/uploads/docs/file.pdf)
+    file_type = Column(String)   # Расширение (pdf, docx, xlsx)
+    category = Column(String)    # Ключ страницы (about_income, corp_docs и т.д.)
+    date = Column(String)        # Дата загрузки

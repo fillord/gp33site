@@ -8,11 +8,14 @@ from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from dotenv import load_dotenv
-
-# Импортируем наши новые модули
+from datetime import datetime # Не забудьте импорт
+from fastapi.responses import FileResponse
+# Импорты БД
 from database import init_models, get_db
+# Импортируем Appeal
+from models import Review as ReviewModel, News as NewsModel, Video as VideoModel, Schedule as ScheduleModel, Vacancy as VacancyModel, Appeal as AppealModel
+from models import Document as DocumentModel
 
-from models import Review as ReviewModel, News as NewsModel, Video as VideoModel, Schedule as ScheduleModel, Vacancy as VacancyModel # <--- Добавили Vacancy
 load_dotenv()
 
 app = FastAPI()
@@ -47,37 +50,37 @@ app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 async def startup():
     await init_models()
 
-# === Pydantic модели (для валидации входящих данных) ===
+# === СХЕМЫ ===
 class ReviewSchema(BaseModel):
     name: str
     text: str
     textKz: Optional[str] = ""
     date: str
 
+class FeedbackSchema(BaseModel):
+    name: str
+    phone: str
+    message: str
+    category: str
+
 # === API ===
 
 # 1. ОТЗЫВЫ
 @app.get("/api/reviews")
 async def get_reviews(db: AsyncSession = Depends(get_db)):
-    # Запрос: выбрать только одобренные
     result = await db.execute(select(ReviewModel).where(ReviewModel.approved == True))
     return result.scalars().all()
 
 @app.post("/api/reviews")
 async def create_review(review: ReviewSchema, db: AsyncSession = Depends(get_db)):
-    # Создаем запись в БД
+    # Логика отзывов (старая)
     new_review = ReviewModel(
-        name=review.name,
-        text=review.text,
-        textKz=review.textKz,
-        date=review.date,
-        approved=False
+        name=review.name, text=review.text, textKz=review.textKz, date=review.date, approved=False
     )
     db.add(new_review)
     await db.commit()
     await db.refresh(new_review)
     
-    # Уведомляем админа в ТГ
     msg_text = f"📝 Новый отзыв #{new_review.id}\n👤 {review.name}\n💬 {review.text}"
     keyboard = {"inline_keyboard": [[
             {"text": "✅ Одобрить", "callback_data": f"approve_{new_review.id}"},
@@ -87,8 +90,7 @@ async def create_review(review: ReviewSchema, db: AsyncSession = Depends(get_db)
         requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
                     json={"chat_id": ADMIN_CHAT_ID, "text": msg_text, "reply_markup": keyboard}, timeout=5)
     except Exception as e:
-        print(f"Ошибка отправки в ТГ: {e}")
-
+        print(f"Ошибка ТГ: {e}")
     return {"status": "ok", "id": new_review.id}
 
 # 2. НОВОСТИ
@@ -116,32 +118,130 @@ async def get_vacancies(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 # === 6. ОТПРАВКА ОБРАЩЕНИЙ В TELEGRAM (НОВОЕ) ===
-class FeedbackSchema(BaseModel):
-    name: str
-    phone: str
-    message: str
-    category: Optional[str] = "Обращение" # Жалоба, Благодарность и т.д.
+# "thanks", "complaint", "proposal"
 
+# 2. ОТПРАВКА ОБРАЩЕНИЯ (Сохранение + ТГ)
 @app.post("/api/feedback")
-async def send_feedback(data: FeedbackSchema):
-    # Формируем красивый текст для Телеграма
+async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)):
+    # 1. Сохраняем
+    new_appeal = AppealModel(
+        name=data.name,
+        phone=data.phone,
+        category=data.category,
+        text=data.message,
+        date=datetime.now().strftime("%d.%m.%Y"),
+        approved=False
+    )
+    db.add(new_appeal)
+    await db.commit()
+    await db.refresh(new_appeal)
+
+    # 2. Текст для админа
+    cat_ru = {
+        "thanks": "🙏 Благодарность",
+        "complaint": "😡 Жалоба",
+        "proposal": "💡 Предложение"
+    }.get(data.category, data.category)
+
     msg_text = (
-        f"🚨 <b>НОВОЕ ОБРАЩЕНИЕ С САЙТА</b>\n"
-        f"📌 <b>Тип:</b> {data.category}\n"
+        f"🚨 <b>НОВОЕ ОБРАЩЕНИЕ #{new_appeal.id}</b>\n"
+        f"📌 <b>Тип:</b> {cat_ru}\n"
         f"👤 <b>Имя:</b> {data.name}\n"
         f"📞 <b>Телефон:</b> {data.phone}\n"
         f"📝 <b>Сообщение:</b>\n{data.message}"
     )
-    
-    # Отправляем в Telegram (токен берется из .env, его никто не увидит)
+
+    # 3. Кнопки
+    # ВАЖНО: Используем 'delete_appeals_{id}', чтобы совпадало с логикой бота
+    reply_markup = None
+    if data.category != "proposal":
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "✅ Опубликовать", "callback_data": f"pub_{new_appeal.id}"},
+                {"text": "❌ Отклонить", "callback_data": f"delete_appeals_{new_appeal.id}"} 
+            ]]
+        }
+
+    # 4. Отправка
     try:
-        requests.post(
-            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={"chat_id": ADMIN_CHAT_ID, "text": msg_text, "parse_mode": "HTML"},
-            timeout=5
-        )
-        return {"status": "ok"}
+        payload = {
+            "chat_id": ADMIN_CHAT_ID,
+            "text": msg_text,
+            "parse_mode": "HTML"
+        }
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+            
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json=payload, timeout=5)
     except Exception as e:
         print(f"Ошибка отправки в ТГ: {e}")
-        return {"status": "error", "detail": str(e)}
+
+    return {"status": "ok", "id": new_appeal.id}
+
+@app.get("/api/appeals")
+async def get_appeals(category: str, db: AsyncSession = Depends(get_db)):
+    # Только одобренные
+    query = select(AppealModel).where(
+        AppealModel.category == category,
+        AppealModel.approved == True
+    ).order_by(AppealModel.id.desc())
     
+    result = await db.execute(query)
+    return result.scalars().all()
+
+@app.get("/api/documents")
+async def get_documents(category: str, db: AsyncSession = Depends(get_db)):
+    """
+    Возвращает список документов для конкретной страницы (категории)
+    """
+    query = select(DocumentModel).where(
+        DocumentModel.category == category
+    ).order_by(DocumentModel.id.desc())
+    
+    result = await db.execute(query)
+    return result.scalars().all()
+
+@app.get("/api/download/{doc_id}")
+async def download_document(doc_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Скачивание документа с восстановлением оригинального имени файла
+    """
+    # 1. Ищем документ в БД
+    query = select(DocumentModel).where(DocumentModel.id == doc_id)
+    result = await db.execute(query)
+    doc = result.scalar_one_or_none()
+
+    if not doc:
+        return {"error": "Document not found"}
+
+    # 2. Формируем полный путь к файлу на диске
+    # doc.file_path хранится как "/uploads/docs/..."
+    # Нам нужно убрать первый слеш и соединить с BASE_DIR
+    relative_path = doc.file_path.lstrip("/")
+    file_full_path = os.path.join(BASE_DIR, relative_path)
+
+    if not os.path.exists(file_full_path):
+        return {"error": "File not found on disk"}
+
+    # 3. Формируем красивое имя файла для пользователя
+    # Если в базе расширение храните как "PDF" (без точки), добавляем точку
+    ext = doc.file_type.lower()
+    if not ext.startswith("."):
+        ext = f".{ext}"
+        
+    # Имя файла = Заголовок из БД + расширение
+    # Функция quote помогает, если в названии есть кириллица или спецсимволы
+    from urllib.parse import quote
+    filename = f"{doc.title}{ext}"
+    
+    # 4. Отдаем файл с заголовком Content-Disposition
+    return FileResponse(
+        path=file_full_path, 
+        filename=filename, 
+        media_type='application/octet-stream'
+    )
+
+# Убедитесь, что папка для документов создается
+DOCS_DIR = os.path.join(UPLOADS_DIR, "docs")
+if not os.path.exists(DOCS_DIR):
+    os.makedirs(DOCS_DIR)
