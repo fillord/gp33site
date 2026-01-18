@@ -5,9 +5,8 @@ import { HeartHandshake, Phone, Mail, MapPin, AlertTriangle, CheckCircle, Send, 
 export default function ServicesSupport() {
   const { lang } = useOutletContext();
   
-  // === НАСТРОЙКИ TELEGRAM (ВСТАВЬТЕ СВОИ ДАННЫЕ) ===
-  const TG_BOT_TOKEN = '8306642177:AAFXtM2zpIJ-Tolx3x4p-cAxLfPlgdwZIJw'; // Например: 7000000:AAFg...
-  const TG_CHAT_ID = '1027958463'; // Например: 12345678
+  // 👇 АДРЕС ВАШЕГО БЭКЕНДА
+  const API_URL = 'http://localhost:8000';
 
   // Состояния формы
   const [formData, setFormData] = useState({ name: '', phone: '', message: '' });
@@ -42,23 +41,16 @@ export default function ServicesSupport() {
     e.preventDefault();
     setStatus('loading');
 
-    const text = `
-🚨 <b>СЛУЖБА ПОДДЕРЖКИ (Сайт)</b>
-
-👤 <b>Имя:</b> ${formData.name}
-📞 <b>Телефон:</b> ${formData.phone}
-📝 <b>Сообщение:</b> 
-${formData.message}
-    `;
-
     try {
-      const response = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
+      // 👇 ОТПРАВЛЯЕМ НА НАШ PYTHON-СЕРВЕР
+      const response = await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: TG_CHAT_ID,
-          text: text,
-          parse_mode: 'HTML'
+          name: formData.name,
+          phone: formData.phone,
+          category: "Служба Поддержки", // Жестко задаем категорию
+          message: formData.message
         })
       });
 

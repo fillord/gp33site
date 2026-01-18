@@ -5,9 +5,8 @@ import { Send, User, Phone, CheckCircle, AlertCircle, Loader2 } from 'lucide-rea
 export default function Feedback() {
   const { lang } = useOutletContext();
   
-  // === НАСТРОЙКИ TELEGRAM (ВСТАВЬТЕ СВОИ ДАННЫЕ) ===
-  const TG_BOT_TOKEN = '8306642177:AAFXtM2zpIJ-Tolx3x4p-cAxLfPlgdwZIJw'; // Ваш токен
-  const TG_CHAT_ID = '1027958463'; // Ваш ID чата
+  // 👇 АДРЕС ВАШЕГО БЭКЕНДА
+  const API_URL = 'http://localhost:8000';
 
   // === ИЗМЕНЕНИЕ 1: Поменяли 'Jaloba' на 'Blagodarnost' ===
   // Теперь при открытии страницы сразу выбрана Благодарность
@@ -42,30 +41,22 @@ export default function Feedback() {
     e.preventDefault();
     setStatus('loading');
 
-    const text = `
-📝 <b>БЛОГ ГЛАВВРАЧА (Обращение)</b>
-
-👤 <b>Имя:</b> ${formData.name}
-📞 <b>Телефон:</b> ${formData.phone}
-📌 <b>Тип:</b> ${formData.category}
-📄 <b>Сообщение:</b> 
-${formData.message}
-    `;
-
     try {
-      const response = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
+      // 👇 ОТПРАВЛЯЕМ НА НАШ PYTHON-СЕРВЕР (БЕЗОПАСНО)
+      const response = await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: TG_CHAT_ID,
-          text: text,
-          parse_mode: 'HTML'
+          name: formData.name,
+          phone: formData.phone,
+          category: formData.category,
+          message: formData.message
         })
       });
 
       if (response.ok) {
         setStatus('success');
-        // Сбрасываем форму (тоже на Благодарность по умолчанию)
+        // Сбрасываем форму
         setFormData({ name: '', phone: '', category: 'Blagodarnost', message: '' });
       } else {
         setStatus('error');
@@ -123,7 +114,6 @@ ${formData.message}
               className="w-full px-4 py-2 border rounded-lg bg-white"
               value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}
             >
-              {/* === ИЗМЕНЕНИЕ 2: Поставили Благодарность первой в списке === */}
               <option value="Blagodarnost">{t.types.blago}</option>
               <option value="Jaloba">{t.types.jaloba}</option>
               <option value="Predlozhenie">{t.types.predloz}</option>

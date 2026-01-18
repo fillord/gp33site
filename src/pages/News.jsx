@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Activity, Loader, X, Calendar, ChevronRight } from 'lucide-react';
 
-export const API_URL = "https://almgp33.kz/api";
-export const DOMAIN_URL = "https://almgp33.kz";
+// 👇 ЛОКАЛЬНЫЕ АДРЕСА
+export const API_URL = "http://localhost:8000/api";
+export const DOMAIN_URL = "http://localhost:8000";
+
 export default function News() {
   const { lang } = useOutletContext();
   const [newsList, setNewsList] = useState([]);
@@ -11,7 +13,6 @@ export default function News() {
   const [selectedNews, setSelectedNews] = useState(null);
 
   useEffect(() => {
-    // 👇 ИСПРАВЛЕНО: убрали /api, оставили только /news
     fetch(`${API_URL}/news`) 
       .then(res => res.json())
       .then(data => {
@@ -50,9 +51,10 @@ export default function News() {
                 onClick={() => setSelectedNews(item)}
                 className="bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 flex flex-col overflow-hidden border border-gray-100 cursor-pointer group transform hover:-translate-y-1"
               >
-                {/* === ФОТО ИЛИ ЗАГЛУШКА === */}
+                {/* === ФОТО === */}
                 <div className="h-48 relative overflow-hidden bg-gray-100">
                     {item.image ? (
+                        // 👇 УБРАЛИ ЛИШНИЙ СЛЭШ
                         <img 
                             src={`${DOMAIN_URL}${item.image}`} 
                             alt={displayTitle} 
@@ -91,9 +93,9 @@ export default function News() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative animate-scale-in flex flex-col">
              
-             {/* Фото в модалке (если есть) */}
              {selectedNews.image && (
                  <div className="w-full h-64 sm:h-80 flex-shrink-0">
+                     {/* 👇 И ТУТ ТОЖЕ БЕЗ СЛЭША */}
                      <img 
                         src={`${DOMAIN_URL}${selectedNews.image}`} 
                         alt="News Cover" 

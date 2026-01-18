@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Briefcase, DollarSign, Clock, Loader, ChevronDown, ChevronUp } from 'lucide-react';
 
-const API_URL = '';
+const API_URL = 'http://localhost:8000';
 
 export default function Vacancies() {
   const { lang } = useOutletContext();

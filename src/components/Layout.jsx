@@ -173,7 +173,7 @@ const getLinkByKey = (key) => {
     return '/'; // Fallback
 };
 
-const API_URL = '';
+const API_URL = 'http://localhost:8000';
 
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

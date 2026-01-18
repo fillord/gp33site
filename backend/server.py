@@ -114,3 +114,34 @@ async def get_schedule(db: AsyncSession = Depends(get_db)):
 async def get_vacancies(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(VacancyModel).order_by(VacancyModel.id.desc()))
     return result.scalars().all()
+
+# === 6. ОТПРАВКА ОБРАЩЕНИЙ В TELEGRAM (НОВОЕ) ===
+class FeedbackSchema(BaseModel):
+    name: str
+    phone: str
+    message: str
+    category: Optional[str] = "Обращение" # Жалоба, Благодарность и т.д.
+
+@app.post("/api/feedback")
+async def send_feedback(data: FeedbackSchema):
+    # Формируем красивый текст для Телеграма
+    msg_text = (
+        f"🚨 <b>НОВОЕ ОБРАЩЕНИЕ С САЙТА</b>\n"
+        f"📌 <b>Тип:</b> {data.category}\n"
+        f"👤 <b>Имя:</b> {data.name}\n"
+        f"📞 <b>Телефон:</b> {data.phone}\n"
+        f"📝 <b>Сообщение:</b>\n{data.message}"
+    )
+    
+    # Отправляем в Telegram (токен берется из .env, его никто не увидит)
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            json={"chat_id": ADMIN_CHAT_ID, "text": msg_text, "parse_mode": "HTML"},
+            timeout=5
+        )
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Ошибка отправки в ТГ: {e}")
+        return {"status": "error", "detail": str(e)}
+    
