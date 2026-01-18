@@ -3,15 +3,16 @@ import Layout from './components/Layout';
 import Home from './pages/Home';
 
 // Наши специальные страницы
+import Feedback from './pages/Feedback'; 
+import GuestAppealsList from './pages/GuestAppealsList'; 
+import GuestReviews from './pages/GuestReviews';
 
-import Feedback from './pages/Feedback';
 import Administration from './pages/Administration';
 import Vacancies from './pages/Vacancies';
 import OrgStructure from './pages/OrgStructure';
 import AboutGeneral from './pages/AboutGeneral';
 import ServicesPrices from './pages/ServicesPrices';
-import GuestReviews from './pages/GuestReviews';      // <-- НОВОЕ
-import PersonalSchedule from './pages/PersonalSchedule'; // <-- НОВОЕ
+import PersonalSchedule from './pages/PersonalSchedule';
 import AboutSphere from './pages/AboutSphere';
 import AboutAnticorruption from './pages/AboutAnticorruption';
 import AboutPolicy from './pages/AboutPolicy';
@@ -36,9 +37,8 @@ import MediaVideo from './pages/MediaVideo';
 import News from './pages/News';
 import ServicesScreening from './pages/ServicesScreening';
 
-import ProtocolsPage from './pages/ProtocolsPage'; // <--- Импортируем
-// Наша универсальная страница для всего остального
-import UniversalPage from './pages/UniversalPage';   // <-- НОВОЕ
+// ProtocolsPage удален, используем UniversalPage
+import UniversalPage from './pages/UniversalPage';
 
 function App() {
   return (
@@ -50,7 +50,6 @@ function App() {
 
           {/* === 2. О ПОЛИКЛИНИКЕ === */}
           <Route path="about/general" element={<AboutGeneral />} />
-          {/* Используем UniversalPage с ключами из pagesData.js */}
           <Route path="about/sphere" element={<AboutSphere />} />
           <Route path="about/anticorruption" element={<AboutAnticorruption />} />
           <Route path="about/structure" element={<OrgStructure />} />
@@ -64,7 +63,9 @@ function App() {
           <Route path="about/policy" element={<AboutPolicy />} />
           <Route path="about/docs/normative" element={<UniversalPage pageId="about_docs_normative" />} />
           <Route path="about/docs/archive" element={<UniversalPage pageId="about_docs_archive" />} />
-          <Route path="about/docs/protocol" element={<ProtocolsPage />} />
+          
+          {/* 👇 ИЗМЕНЕНИЕ: Используем UniversalPage вместо ProtocolsPage */}
+          <Route path="about/docs/protocol" element={<UniversalPage pageId="protocols" />} />
 
           <Route path="about/corp/council" element={<UniversalPage pageId="corp_council" />} />
           <Route path="about/corp/docs" element={<UniversalPage pageId="corp_docs" />} />
@@ -75,9 +76,9 @@ function App() {
           <Route path="blog/feedback" element={<Feedback />} />
 
           {/* === 4. ГОСТЕВАЯ === */}
-          <Route path="guest/thanks" element={<Feedback />} />
-          <Route path="guest/complaints" element={<Feedback />} />
-          <Route path="guest/reviews" element={<GuestReviews />} /> {/* Специальный компонент */}
+          <Route path="guest/thanks" element={<GuestAppealsList category="thanks" />} />
+          <Route path="guest/complaints" element={<GuestAppealsList category="complaint" />} />
+          <Route path="guest/reviews" element={<GuestReviews />} /> 
 
           {/* === 5. ГОСУСЛУГИ === */}
           <Route path="services/acts" element={<ServicesActs />} />
@@ -95,7 +96,7 @@ function App() {
           <Route path="patients/admin-reception" element={<ServicesReception />} />
           <Route path="patients/support" element={<ServicesSupport />} />
           <Route path="patients/territory" element={<ServicesArea />} />
-          <Route path="patients/personal-schedule" element={<PersonalSchedule />} /> {/* Специальный компонент */}
+          <Route path="patients/personal-schedule" element={<PersonalSchedule />} />
           <Route path="patients/doc-schedule" element={<ServicesDoctors />} />
           <Route path="patients/rights" element={<ServicesPatientRules />} />
           <Route path="patients/prices" element={<ServicesPrices />} />

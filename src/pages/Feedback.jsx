@@ -8,48 +8,48 @@ export default function Feedback() {
   // 👇 АДРЕС ВАШЕГО БЭКЕНДА
   const API_URL = 'http://localhost:8000';
 
-  // === ИЗМЕНЕНИЕ 1: Поменяли 'Jaloba' на 'Blagodarnost' ===
-  // Теперь при открытии страницы сразу выбрана Благодарность
-  const [formData, setFormData] = useState({ name: '', phone: '', category: 'Blagodarnost', message: '' });
+  // Используем 'thanks', 'complaint', 'proposal' для совместимости с сервером
+  const [formData, setFormData] = useState({ name: '', phone: '', category: 'thanks', message: '' });
   
   const [status, setStatus] = useState(null); // 'loading', 'success', 'error'
 
   const translations = {
     ru: {
       title: "Подать обращение",
-      subtitle: "Блог главного врача. Если у вас есть вопросы, жалобы или предложения, заполните форму ниже.",
+      subtitle: "Блог главного врача. Ваше обращение будет рассмотрено администрацией.",
       labels: { name: "Ваше ФИО", phone: "Телефон", type: "Тип обращения", msg: "Текст обращения", btn: "Отправить" },
-      types: { predloz: "Предложение", jaloba: "Жалоба", blago: "Благодарность" },
+      // Тексты для UI
+      types: { predloz: "Предложение ", jaloba: "Жалоба ", blago: "Благодарность " },
       sending: "Отправка...",
-      success: "Спасибо! Ваше обращение принято.",
+      success: "Спасибо! Ваше обращение отправлено на модерацию.",
       error: "Ошибка отправки. Попробуйте позже."
     },
     kz: {
       title: "Өтініш беру",
-      subtitle: "Бас дәрігердің блогы. Егер сұрақтарыңыз немесе шағымдарыңыз болса, төмендегі форманы толтырыңыз.",
+      subtitle: "Бас дәрігердің блогы. Сіздің өтінішіңізді әкімшілік қарайды.",
       labels: { name: "Аты-жөніңіз", phone: "Телефон", type: "Өтініш түрі", msg: "Мәтін", btn: "Жіберу" },
-      types: { predloz: "Ұсыныс", jaloba: "Шағым", blago: "Алғыс" },
+      types: { predloz: "Ұсыныс (тек әкімшілік үшін)", jaloba: "Шағым (тексерілгеннен кейін жарияланады)", blago: "Алғыс (тексерілгеннен кейін жарияланады)" },
       sending: "Жіберілуде...",
-      success: "Рахмет! Сіздің өтінішіңіз қабылданды.",
+      success: "Рахмет! Сіздің өтінішіңіз модерацияға жіберілді.",
       error: "Жіберу қатесі. Кейінірек қайталаңыз."
     }
   };
 
-  const t = translations[lang];
+  const t = translations[lang] || translations.ru;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus('loading');
 
     try {
-      // 👇 ОТПРАВЛЯЕМ НА НАШ PYTHON-СЕРВЕР (БЕЗОПАСНО)
+      // 👇 ОТПРАВЛЯЕМ НА НАШ PYTHON-СЕРВЕР
       const response = await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name,
           phone: formData.phone,
-          category: formData.category,
+          category: formData.category, // thanks, complaint, proposal
           message: formData.message
         })
       });
@@ -57,7 +57,7 @@ export default function Feedback() {
       if (response.ok) {
         setStatus('success');
         // Сбрасываем форму
-        setFormData({ name: '', phone: '', category: 'Blagodarnost', message: '' });
+        setFormData({ name: '', phone: '', category: 'thanks', message: '' });
       } else {
         setStatus('error');
       }
@@ -111,12 +111,13 @@ export default function Feedback() {
           <div className="mb-4">
             <label className="block text-gray-700 font-bold mb-2">{t.labels.type}</label>
             <select 
-              className="w-full px-4 py-2 border rounded-lg bg-white"
+              className="w-full px-4 py-2 border rounded-lg bg-white focus:ring-2 focus:ring-teal-500"
               value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}
             >
-              <option value="Blagodarnost">{t.types.blago}</option>
-              <option value="Jaloba">{t.types.jaloba}</option>
-              <option value="Predlozhenie">{t.types.predloz}</option>
+              {/* Value совпадают с category в БД */}
+              <option value="thanks">{t.types.blago}</option>
+              <option value="complaint">{t.types.jaloba}</option>
+              <option value="proposal">{t.types.predloz}</option>
             </select>
           </div>
 
