@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext, Link } from 'react-router-dom';
 import { Calendar, FileText, ArrowRight, Activity, Clock, Phone, MapPin, Loader } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000'; // Адрес вашего сервера
+const API_URL = ''; // Адрес вашего сервера
 
 export default function Home() {
   const { lang } = useOutletContext();

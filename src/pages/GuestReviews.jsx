@@ -5,7 +5,7 @@ import { User, MessageSquare, PenTool, X, CheckCircle, Loader } from 'lucide-rea
 // === АДРЕС ВАШЕГО БЭКЕНДА ===
 // Если запускаете локально: 'http://localhost:8000'
 // Если на сервере: 'https://api.yolacloud.ru' (потребуется настройка Nginx)
-const API_URL = 'http://localhost:8000'; 
+const API_URL = ''; 
 
 export default function GuestReviews() {
   const { lang } = useOutletContext();

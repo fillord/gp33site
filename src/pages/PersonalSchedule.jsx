@@ -45,26 +45,26 @@ export default function PersonalReception() {
       color: "bg-blue-600",
       img: "/zam_lech.jpg" // Замените на фото
     },
-    {
-      id: 3,
-      role: { ru: "Зам. директора по ККМУ", kz: "Директордың МҚСБ жөніндегі орынбасары" },
-      name: { ru: "Вакансия", kz: "Вакансия" }, // Если есть человек, впишите
-      day: { ru: "Среда", kz: "Сәрсенбі" },
-      time: "14:00 - 16:00",
-      cabinet: "225",
-      color: "bg-indigo-600",
-      img: "https://via.placeholder.com/150?text=Quality"
-    },
-    {
-      id: 4,
-      role: { ru: "Зам. директора по ОМР", kz: "Директордың ҰӘЖ жөніндегі орынбасары" },
-      name: { ru: "Вакансия", kz: "Вакансия" },
-      day: { ru: "Четверг", kz: "Бейсенбі" },
-      time: "14:00 - 18:00",
-      cabinet: "223",
-      color: "bg-purple-600",
-      img: "https://via.placeholder.com/150?text=Org"
-    },
+   //  {
+   //    id: 3,
+   //    role: { ru: "Зам. директора по ККМУ", kz: "Директордың МҚСБ жөніндегі орынбасары" },
+   //    name: { ru: "Вакансия", kz: "Вакансия" }, // Если есть человек, впишите
+   //    day: { ru: "Среда", kz: "Сәрсенбі" },
+   //    time: "14:00 - 16:00",
+   //    cabinet: "225",
+   //    color: "bg-indigo-600",
+   //    img: "https://via.placeholder.com/150?text=Quality"
+   //  },
+   //  {
+   //    id: 4,
+   //    role: { ru: "Зам. директора по ОМР", kz: "Директордың ҰӘЖ жөніндегі орынбасары" },
+   //    name: { ru: "Вакансия", kz: "Вакансия" },
+   //    day: { ru: "Четверг", kz: "Бейсенбі" },
+   //    time: "14:00 - 18:00",
+   //    cabinet: "223",
+   //    color: "bg-purple-600",
+   //    img: "https://via.placeholder.com/150?text=Org"
+   //  },
     {
       id: 5,
       role: { ru: "Главная медсестра", kz: "Бас мейірбике" },

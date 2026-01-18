@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Activity, Loader, X, Calendar, ChevronRight } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000';
-
+export const API_URL = "https://almgp33.kz/api";
+export const DOMAIN_URL = "https://almgp33.kz";
 export default function News() {
   const { lang } = useOutletContext();
   const [newsList, setNewsList] = useState([]);
@@ -11,7 +11,8 @@ export default function News() {
   const [selectedNews, setSelectedNews] = useState(null);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/news`)
+    // 👇 ИСПРАВЛЕНО: убрали /api, оставили только /news
+    fetch(`${API_URL}/news`) 
       .then(res => res.json())
       .then(data => {
         setNewsList(data);
@@ -53,7 +54,7 @@ export default function News() {
                 <div className="h-48 relative overflow-hidden bg-gray-100">
                     {item.image ? (
                         <img 
-                            src={`${API_URL}${item.image}`} 
+                            src={`${DOMAIN_URL}${item.image}`} 
                             alt={displayTitle} 
                             className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
                         />
@@ -94,7 +95,7 @@ export default function News() {
              {selectedNews.image && (
                  <div className="w-full h-64 sm:h-80 flex-shrink-0">
                      <img 
-                        src={`${API_URL}${selectedNews.image}`} 
+                        src={`${DOMAIN_URL}${selectedNews.image}`} 
                         alt="News Cover" 
                         className="w-full h-full object-cover"
                      />

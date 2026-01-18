@@ -74,7 +74,7 @@ const translations = {
       addressTitle: "Адрес:",
       address: "Алматы, проспект Райымбека, 263/2",
       hoursTitle: "Часы работы:",
-      hours: "ПН-ПТ с 08:00-20:00, СБ с 09:00-12:00",
+      hours: "ПН-ПТ с 08:00-20:00, СБ с 09:00-14:00",
       phoneTitle: "Телефон:",
       emailTitle: "E-mail:",
       navTitle: "Меню навигации",
@@ -173,7 +173,7 @@ const getLinkByKey = (key) => {
     return '/'; // Fallback
 };
 
-const API_URL = 'http://localhost:8000';
+const API_URL = '';
 
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

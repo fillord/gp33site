@@ -6,10 +6,13 @@ export default function Feedback() {
   const { lang } = useOutletContext();
   
   // === НАСТРОЙКИ TELEGRAM (ВСТАВЬТЕ СВОИ ДАННЫЕ) ===
-  const TG_BOT_TOKEN = '8306642177:AAFXtM2zpIJ-Tolx3x4p-cAxLfPlgdwZIJw'; // Например: 7000000:AAFg...
-  const TG_CHAT_ID = '1027958463'; 
+  const TG_BOT_TOKEN = '8306642177:AAFXtM2zpIJ-Tolx3x4p-cAxLfPlgdwZIJw'; // Ваш токен
+  const TG_CHAT_ID = '1027958463'; // Ваш ID чата
 
-  const [formData, setFormData] = useState({ name: '', phone: '', category: 'Jaloba', message: '' });
+  // === ИЗМЕНЕНИЕ 1: Поменяли 'Jaloba' на 'Blagodarnost' ===
+  // Теперь при открытии страницы сразу выбрана Благодарность
+  const [formData, setFormData] = useState({ name: '', phone: '', category: 'Blagodarnost', message: '' });
+  
   const [status, setStatus] = useState(null); // 'loading', 'success', 'error'
 
   const translations = {
@@ -62,7 +65,8 @@ ${formData.message}
 
       if (response.ok) {
         setStatus('success');
-        setFormData({ name: '', phone: '', category: 'Jaloba', message: '' });
+        // Сбрасываем форму (тоже на Благодарность по умолчанию)
+        setFormData({ name: '', phone: '', category: 'Blagodarnost', message: '' });
       } else {
         setStatus('error');
       }
@@ -119,9 +123,10 @@ ${formData.message}
               className="w-full px-4 py-2 border rounded-lg bg-white"
               value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}
             >
+              {/* === ИЗМЕНЕНИЕ 2: Поставили Благодарность первой в списке === */}
+              <option value="Blagodarnost">{t.types.blago}</option>
               <option value="Jaloba">{t.types.jaloba}</option>
               <option value="Predlozhenie">{t.types.predloz}</option>
-              <option value="Blagodarnost">{t.types.blago}</option>
             </select>
           </div>
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { PlayCircle, Loader, X, Youtube } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = '';
 
 export default function MediaVideo() {
   const { lang } = useOutletContext();
