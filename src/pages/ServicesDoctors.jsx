@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Calendar, Search, Loader, User, Clock, MapPin, LayoutGrid } from 'lucide-react';
 
-const API_URL = 'http://localhost:8000';
+const API_URL = 'https://almgp33.kz';
 
 export default function ServicesDoctors() {
   const { lang } = useOutletContext();

@@ -1,45 +1,56 @@
 import React, { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Loader2, MessageCircle } from 'lucide-react';
+import { API_URL } from '../config'; // Убедитесь, что этот файл существует!
 
 export default function GuestAppealsList({ category }) {
   const { lang } = useOutletContext();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Тексты для заголовков
   const texts = {
     ru: {
       thanks: "Благодарности пациентов",
       complaint: "Жалобы и обращения",
       empty: "В данной категории пока нет записей.",
-      readMore: "Читать полностью"
+      error: "Ошибка загрузки данных"
     },
     kz: {
       thanks: "Пациенттердің алғыстары",
       complaint: "Шағымдар мен өтініштер",
       empty: "Бұл санатта әзірге жазбалар жоқ.",
-      readMore: "Толығырақ оқу"
+      error: "Деректерді жүктеу қатесі"
     }
   };
 
   const t = texts[lang] || texts.ru;
   const title = category === 'thanks' ? t.thanks : t.complaint;
 
-  // Адрес бэкенда
-  const API_URL = 'http://localhost:8000';
-
   useEffect(() => {
     setLoading(true);
-    // Запрашиваем с сервера (category передается пропсом: 'thanks' или 'complaint')
-    fetch(`${API_URL}/api/appeals?category=${category}`)
-      .then(res => res.json())
+    // Добавляем /api к базовому URL
+    const url = `${API_URL}/api/appeals?category=${category}`;
+    console.log("Fetching:", url); // Смотрим в консоль браузера (F12)
+
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
-        setItems(data);
+        // ЗАЩИТА: Проверяем, что пришел именно массив
+        if (Array.isArray(data)) {
+            setItems(data);
+        } else {
+            console.error("Data is not array:", data);
+            setItems([]);
+        }
         setLoading(false);
       })
       .catch(err => {
-        console.error(err);
+        console.error("Fetch error:", err);
+        setError(err.message);
         setLoading(false);
       });
   }, [category]);
@@ -57,14 +68,21 @@ export default function GuestAppealsList({ category }) {
         </div>
       )}
 
-      {!loading && items.length === 0 && (
+      {error && (
+        <div className="p-4 bg-red-100 text-red-700 rounded mb-4">
+            Ошибка: {error}. Проверьте консоль (F12).
+        </div>
+      )}
+
+      {/* ЗАЩИТА: Проверяем items перед map */}
+      {!loading && !error && items.length === 0 && (
         <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-300">
           <p className="text-gray-500 text-lg">{t.empty}</p>
         </div>
       )}
 
       <div className="space-y-6">
-        {items.map((item) => (
+        {items && items.map((item) => (
           <div key={item.id} className="bg-white p-6 rounded-xl shadow-md border-l-4 border-teal-500 hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-start mb-3">
               <h3 className="text-lg font-bold text-gray-800">{item.name}</h3>

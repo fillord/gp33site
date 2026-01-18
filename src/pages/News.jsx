@@ -3,8 +3,8 @@ import { useOutletContext } from 'react-router-dom';
 import { Activity, Loader, X, Calendar, ChevronRight } from 'lucide-react';
 
 // 👇 ЛОКАЛЬНЫЕ АДРЕСА
-export const API_URL = "http://localhost:8000/api";
-export const DOMAIN_URL = "http://localhost:8000";
+export const API_URL = "https://almgp33.kz/api";
+export const DOMAIN_URL = "https://almgp33.kz";
 
 export default function News() {
   const { lang } = useOutletContext();

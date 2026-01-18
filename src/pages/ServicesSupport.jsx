@@ -6,7 +6,7 @@ export default function ServicesSupport() {
   const { lang } = useOutletContext();
   
   // 👇 АДРЕС ВАШЕГО БЭКЕНДА
-  const API_URL = 'http://localhost:8000';
+  const API_URL = 'https://almgp33.kz';
 
   // Состояния формы
   const [formData, setFormData] = useState({ name: '', phone: '', message: '' });

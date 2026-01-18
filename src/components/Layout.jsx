@@ -173,7 +173,7 @@ const getLinkByKey = (key) => {
     return '/'; // Fallback
 };
 
-const API_URL = 'http://localhost:8000';
+const API_URL = 'https://almgp33.kz';
 
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

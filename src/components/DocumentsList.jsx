@@ -1,21 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { FileText, FileSpreadsheet, File, Download, Loader2 } from 'lucide-react';
+import { API_URL } from '../config'; // Импорт конфига
 
 export default function DocumentsList({ category }) {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const API_URL = 'http://localhost:8000';
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
+    // Добавляем /api если его нет в конфиге
     fetch(`${API_URL}/api/documents?category=${category}`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("Network response was not ok");
+        return res.json();
+      })
       .then(data => {
-        setDocs(data);
+        if (Array.isArray(data)) {
+            setDocs(data);
+        } else {
+            console.error("Docs data is not array:", data);
+            setDocs([]);
+        }
         setLoading(false);
       })
       .catch(err => {
         console.error("Ошибка загрузки документов:", err);
+        setError(true);
         setLoading(false);
       });
   }, [category]);
@@ -29,6 +40,9 @@ export default function DocumentsList({ category }) {
   };
 
   if (loading) return <div className="py-4"><Loader2 className="animate-spin text-teal-600" /></div>;
+  if (error) return <div className="text-red-500 text-sm">Не удалось загрузить документы.</div>;
+  
+  // Если документов нет или массив пуст
   if (!docs || docs.length === 0) return null;
 
   return (
@@ -49,7 +63,7 @@ export default function DocumentsList({ category }) {
             
             <a 
               href={`${API_URL}/api/download/${doc.id}`} 
-              download // Атрибут download подсказывает браузеру, что это скачивание
+              download
               className="flex items-center gap-2 bg-teal-50 text-teal-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-teal-100 transition-colors ml-4 whitespace-nowrap"
             >
               <Download size={16} />

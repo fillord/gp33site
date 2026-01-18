@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { User, MessageSquare, PenTool, X, CheckCircle, Loader } from 'lucide-react';
-
+import { API_URL } from '../config';
 // === АДРЕС ВАШЕГО БЭКЕНДА ===
 // Если запускаете локально: 'http://localhost:8000'
 // Если на сервере: 'https://api.yolacloud.ru' (потребуется настройка Nginx)
-const API_URL = 'http://localhost:8000'; 
+
 
 export default function GuestReviews() {
   const { lang } = useOutletContext();

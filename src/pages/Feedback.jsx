@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Send, User, Phone, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { API_URL } from '../config';
 
 export default function Feedback() {
   const { lang } = useOutletContext();
   
   // 👇 АДРЕС ВАШЕГО БЭКЕНДА
-  const API_URL = 'http://localhost:8000';
+
 
   // Используем 'thanks', 'complaint', 'proposal' для совместимости с сервером
   const [formData, setFormData] = useState({ name: '', phone: '', category: 'thanks', message: '' });
