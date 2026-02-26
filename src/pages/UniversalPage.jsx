@@ -1,19 +1,23 @@
-import React from 'react';
-import { useParams, useOutletContext } from 'react-router-dom';
+import React from "react";
+import { useParams, useOutletContext } from "react-router-dom";
 // Не забудьте фигурные скобки, как мы исправили в прошлый раз
-import { pagesData } from '../data/pagesData'; 
-import DocumentsList from '../components/DocumentsList'; 
+import { pagesData } from "../data/pagesData";
+import DocumentsList from "../components/DocumentsList";
 
 export default function UniversalPage({ pageId }) {
   const { lang } = useOutletContext();
-  
+
   // Берем ID страницы из props или из URL
   const params = useParams();
-  const id = pageId || params.id || '404';
+  const id = pageId || params.id || "404";
 
   // Проверка на наличие базы данных
   if (!pagesData) {
-    return <div className="p-10 text-center text-red-500">Ошибка: pagesData не найден</div>;
+    return (
+      <div className="p-10 text-center text-red-500">
+        Ошибка: pagesData не найден
+      </div>
+    );
   }
 
   const data = pagesData[id];
@@ -23,7 +27,7 @@ export default function UniversalPage({ pageId }) {
     return (
       <div className="container mx-auto px-4 py-12 text-center">
         <h1 className="text-2xl font-bold text-gray-400">
-            Страница не найдена / Парақ табылмады ({id})
+          Страница не найдена / Парақ табылмады ({id})
         </h1>
         {/* Показываем документы, даже если описания страницы нет */}
         <DocumentsList category={id} />
@@ -42,12 +46,14 @@ export default function UniversalPage({ pageId }) {
           {content.title}
         </h1>
       )}
-      
+
       {/* Текст (только если он есть) */}
       {content.text && (
         <div className="prose prose-lg max-w-none text-gray-700 leading-relaxed mb-8">
-          {content.text.split('\n').map((line, idx) => (
-            <p key={idx} className="mb-4">{line}</p>
+          {content.text.split("\n").map((line, idx) => (
+            <p key={idx} className="mb-4">
+              {line}
+            </p>
           ))}
         </div>
       )}

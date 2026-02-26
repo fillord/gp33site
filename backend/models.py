@@ -1,5 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text
+from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey, DateTime
 from database import Base
+from sqlalchemy.orm import relationship
+from datetime import datetime
 
 class Review(Base):
     __tablename__ = "reviews"
@@ -68,3 +70,40 @@ class Document(Base):
     file_type = Column(String)   # Расширение (pdf, docx, xlsx)
     category = Column(String)    # Ключ страницы (about_income, corp_docs и т.д.)
     date = Column(String)        # Дата загрузки
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_token = Column(String, unique=True, index=True)
+    user_name = Column(String)
+    user_phone = Column(String)
+    status = Column(String, default="open")
+    created_at = Column(DateTime, default=datetime.now)
+    
+    # НОВЫЕ КОЛОНКИ:
+    manager_id = Column(Integer, nullable=True) # ID менеджера, который принял чат
+    manager_name = Column(String, nullable=True) # Имя менеджера
+
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("chat_sessions.id"))
+    sender = Column(String) # "client" или "manager"
+    text = Column(Text)
+    timestamp = Column(DateTime, default=datetime.now)
+
+    session = relationship("ChatSession", back_populates="messages")
+
+class ChatManager(Base):
+    __tablename__ = "chat_managers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_id = Column(String, unique=True, index=True, nullable=True) # Теперь не обязателен
+    username = Column(String, unique=True, index=True, nullable=True) # ЛОГИН
+    password = Column(String, nullable=True) # ПАРОЛЬ
+    name = Column(String)
+    role = Column(String, default="manager")

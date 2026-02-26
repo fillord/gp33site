@@ -1,6 +1,6 @@
-import React from 'react';
-import { useOutletContext, Link } from 'react-router-dom';
-import { Facebook, Instagram, Mail, Phone } from 'lucide-react'; // Убедитесь, что lucide-react установлен
+import React from "react";
+import { useOutletContext, Link } from "react-router-dom";
+import { Facebook, Instagram, Mail, Phone } from "lucide-react"; // Убедитесь, что lucide-react установлен
 
 export default function AboutGeneral() {
   const { lang } = useOutletContext();
@@ -16,8 +16,8 @@ export default function AboutGeneral() {
         "Специалисты поликлиники оказывают первичную медико-санитарную помощь жителям Жетысуского района (в том числе жителям массива «Рабочий поселок»).",
         "Плановая мощность поликлиники — 240 посещений в смену.",
         "Прикрепленное население составляет более 15 000 человек.",
-        "Штат сотрудников включает 110 высококвалифицированных специалиста (ВОП, педиатры, профильные специалисты)."
-      ]
+        "Штат сотрудников включает 110 высококвалифицированных специалиста (ВОП, педиатры, профильные специалисты).",
+      ],
     },
     kz: {
       breadcrumb: "БАСТЫ БЕТ / ЖАЛПЫ АҚПАРАТ",
@@ -28,12 +28,12 @@ export default function AboutGeneral() {
         "Емхана мамандары Жетісу ауданының тұрғындарына (соның ішінде «Жұмысшы ауылы» тұрғындарына) алғашқы медициналық-санитарлық көмек көрсетеді.",
         "Емхананың жоспарлы қуаты — ауысымына 240 келуші.",
         "Тіркелген халық саны 15 000-нан астам адамды құрайды.",
-        "Қызметкерлер штатында 110 жоғары білікті маман (ЖТД, педиатрлар, бейінді мамандар) бар."
-      ]
-    }
+        "Қызметкерлер штатында 110 жоғары білікті маман (ЖТД, педиатрлар, бейінді мамандар) бар.",
+      ],
+    },
   };
 
-  const t = content[lang] || content['ru'];
+  const t = content[lang] || content["ru"];
 
   return (
     <div className="flex flex-col min-h-[60vh]">
@@ -62,14 +62,23 @@ export default function AboutGeneral() {
 
           {/* 3. SOCIAL ICONS (Как на фото внизу) */}
           <div className="mt-12 flex space-x-3">
-            <a href="https://www.instagram.com/emhana33_almaty/" className="w-10 h-10 bg-blue-800 text-white rounded flex items-center justify-center hover:opacity-80 transition">
+            <a
+              href="https://www.instagram.com/emhana33_almaty/"
+              className="w-10 h-10 bg-blue-800 text-white rounded flex items-center justify-center hover:opacity-80 transition"
+            >
               <Instagram size={20} />
             </a>
-            <a href="tel:+77273395903" className="w-10 h-10 bg-green-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-               <Phone size={20} />
+            <a
+              href="tel:+77273395903"
+              className="w-10 h-10 bg-green-500 text-white rounded flex items-center justify-center hover:opacity-80 transition"
+            >
+              <Phone size={20} />
             </a>
-            <a href="mailto:priemnaya_gp33@mail.ru" className="w-10 h-10 bg-red-500 text-white rounded flex items-center justify-center hover:opacity-80 transition">
-               <Mail size={20} />
+            <a
+              href="mailto:priemnaya_gp33@mail.ru"
+              className="w-10 h-10 bg-red-500 text-white rounded flex items-center justify-center hover:opacity-80 transition"
+            >
+              <Mail size={20} />
             </a>
           </div>
         </div>

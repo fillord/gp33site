@@ -6,8 +6,7 @@ import uuid
 
 from sqlalchemy import select, delete, update as sql_update
 from database import async_session
-# ИМПОРТИРУЕМ Appeal
-from models import News, Video, Review, Schedule, Vacancy, Appeal, Document
+from models import News, Video, Review, Schedule, Vacancy, Appeal, Document, ChatManager
 from dotenv import load_dotenv
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -38,28 +37,13 @@ logging.basicConfig(
 )
 
 # === СОСТОЯНИЯ ===
-CHOOSING_ACTION = 0
-NEWS_TITLE_RU = 1
-NEWS_TITLE_KZ = 2
-NEWS_TEXT_RU = 3
-NEWS_TEXT_KZ = 4
-NEWS_PHOTO = 5   
-VIDEO_TITLE_RU = 6
-VIDEO_TITLE_KZ = 7
-VIDEO_URL = 8
-WAITING_SCHEDULE = 9
-WAITING_VACANCY_TITLE, WAITING_VACANCY_SALARY, WAITING_VACANCY_TEXT = range(10, 13)
-DOC_CATEGORY_SELECT, DOC_ACTION, DOC_UPLOAD_FILE, DOC_TITLE_INPUT = range(13, 17)
+(CHOOSING_ACTION, NEWS_TITLE_RU, NEWS_TITLE_KZ, NEWS_TEXT_RU, NEWS_TEXT_KZ, NEWS_PHOTO, 
+ VIDEO_TITLE_RU, VIDEO_TITLE_KZ, VIDEO_URL, WAITING_SCHEDULE, 
+ WAITING_VACANCY_TITLE, WAITING_VACANCY_SALARY, WAITING_VACANCY_TEXT, 
+ DOC_CATEGORY_SELECT, DOC_ACTION, DOC_UPLOAD_FILE, DOC_TITLE_INPUT,
+ EMP_ACTION, EMP_ROLE, EMP_NAME, EMP_LOGIN, EMP_PASS, EMP_WAIT_NEW_PASS) = range(23)
 
 # === КЛАВИАТУРЫ ===
-# MAIN_MENU_MARKUP = ReplyKeyboardMarkup([
-#     ["📅 Обновить график"],
-#     ["📰 Добавить новость", "🎥 Добавить видео"],
-#     ["📋 Список новостей", "📋 Список видео"],
-#     ["📋 Список вакансий", ""],
-#     ["💬 Список отзывов"]
-# ], resize_keyboard=True)
-
 DOC_CATEGORIES = {
     "💰 Доходы и расходы": "about_income",
     "🏛 Госзакуп": "about_procurement",
@@ -69,19 +53,17 @@ DOC_CATEGORIES = {
     "📜 Лицензии": "corp_licenses",
     "📝 Протокола": "protocols"
 }
-DOC_CATS_REVERSE = {v: k for k, v in DOC_CATEGORIES.items()}
 
 MAIN_MENU_MARKUP = ReplyKeyboardMarkup([ 
     ["📰 Добавить новость", "📋 Список новостей"],
     ["🎥 Добавить видео", "📋 Список видео"],
     ["💼 Вакансии (Добавить)", "📋 Список вакансий"], 
     ["📅 Обновить график","💬 Список отзывов", "📋 Обращения"],
-    ["📂 Управление документами"]
+    ["📂 Управление документами", "👥 Сотрудники (CRM)"]
 ], resize_keyboard=True)
 
 # Меню выбора категорий документов
 doc_buttons = list(DOC_CATEGORIES.keys())
-# Разбиваем по 2 кнопки в ряд
 rows = [doc_buttons[i:i + 2] for i in range(0, len(doc_buttons), 2)]
 rows.append(["❌ Отмена"])
 DOC_CATS_MARKUP = ReplyKeyboardMarkup(rows, resize_keyboard=True)
@@ -92,11 +74,18 @@ DOC_ACTIONS_MARKUP = ReplyKeyboardMarkup([
     ["❌ Главное меню"]
 ], resize_keyboard=True)
 
-SKIP_TITLE_MARKUP = ReplyKeyboardMarkup([
-    ["👌 Оставить имя файла"],
+EMP_ACTIONS_MARKUP = ReplyKeyboardMarkup([
+    ["➕ Добавить сотрудника"],
+    ["📋 Список сотрудников"],
+    ["⬅️ Главное меню"]
+], resize_keyboard=True)
+
+EMP_ROLE_MARKUP = ReplyKeyboardMarkup([
+    ["👨‍💻 Менеджер", "👑 Администратор"],
     ["❌ Отмена"]
 ], resize_keyboard=True)
 
+SKIP_TITLE_MARKUP = ReplyKeyboardMarkup([["👌 Оставить имя файла"], ["❌ Отмена"]], resize_keyboard=True)
 CANCEL_MARKUP = ReplyKeyboardMarkup([["❌ Отмена"]], resize_keyboard=True)
 PHOTO_MARKUP = ReplyKeyboardMarkup([["⏭ Пропустить фото"], ["❌ Отмена"]], resize_keyboard=True)
 
@@ -129,8 +118,6 @@ async def choose_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🎥 Добавить видео":
         await update.message.reply_text("🇷🇺 Шаг 1/3: Введите название видео (RU):", reply_markup=CANCEL_MARKUP)
         return VIDEO_TITLE_RU
-        
-    # СПИСКИ
     elif text == "💬 Список отзывов":
         await show_list(update, "reviews", "Отзывы")
         return CHOOSING_ACTION
@@ -140,18 +127,119 @@ async def choose_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📋 Список видео":
         await show_list(update, "videos", "Видео")
         return CHOOSING_ACTION
-    elif text == "📋 Список вакансий": # Добавлено для вакансий, если не было
-        await list_vacancies(update, context) # Используем спец функцию или show_list
+    elif text == "📋 Список вакансий": 
+        await list_vacancies(update, context) 
         return CHOOSING_ACTION
-    
-    # НОВОЕ: СПИСОК ОБРАЩЕНИЙ
     elif text == "📋 Обращения":
         await show_list(update, "appeals", "Обращения (Благодарности/Жалобы)")
         return CHOOSING_ACTION
-        
+    elif text == "👥 Сотрудники (CRM)":
+        await update.message.reply_text("👥 Управление доступом в CRM", reply_markup=EMP_ACTIONS_MARKUP)
+        return EMP_ACTION
     else:
         await update.message.reply_text("Используйте кнопки меню.", reply_markup=MAIN_MENU_MARKUP)
         return CHOOSING_ACTION
+
+# === СОТРУДНИКИ (CRM) ===
+async def emp_action_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    if text == "➕ Добавить сотрудника":
+        await update.message.reply_text("Выберите роль нового сотрудника:", reply_markup=EMP_ROLE_MARKUP)
+        return EMP_ROLE
+    elif text == "📋 Список сотрудников":
+        await emp_list(update, context)
+        return EMP_ACTION
+    elif text == "⬅️ Главное меню":
+        await update.message.reply_text("Главное меню", reply_markup=MAIN_MENU_MARKUP)
+        return CHOOSING_ACTION
+    else:
+        return EMP_ACTION
+
+async def emp_role_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    role_text = update.message.text
+    if role_text not in ["👨‍💻 Менеджер", "👑 Администратор"]:
+        return EMP_ROLE
+    context.user_data['emp_role'] = "admin" if role_text == "👑 Администратор" else "manager"
+    await update.message.reply_text("👤 Введите Имя и Фамилию сотрудника:", reply_markup=CANCEL_MARKUP)
+    return EMP_NAME
+
+async def emp_name_entered(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['emp_name'] = update.message.text
+    await update.message.reply_text("🔑 Придумайте логин (только английские буквы и цифры):", reply_markup=CANCEL_MARKUP)
+    return EMP_LOGIN
+
+async def emp_login_entered(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    login = update.message.text
+    async with async_session() as session:
+        res = await session.execute(select(ChatManager).where(ChatManager.username == login))
+        if res.scalar_one_or_none():
+            await update.message.reply_text("❌ Этот логин уже занят! Введите другой:", reply_markup=CANCEL_MARKUP)
+            return EMP_LOGIN
+            
+    context.user_data['emp_login'] = login
+    await update.message.reply_text("🔒 Придумайте пароль:", reply_markup=CANCEL_MARKUP)
+    return EMP_PASS
+
+async def emp_pass_entered(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    password = update.message.text
+    async with async_session() as session:
+        new_emp = ChatManager(
+            username=context.user_data['emp_login'],
+            password=password,
+            name=context.user_data['emp_name'],
+            role=context.user_data['emp_role']
+        )
+        session.add(new_emp)
+        await session.commit()
+    
+    role_str = "👑 Администратор" if context.user_data['emp_role'] == "admin" else "👨‍💻 Менеджер"
+    await update.message.reply_text(
+        f"✅ {role_str} успешно создан!\n\n"
+        f"👤 Имя: {context.user_data['emp_name']}\n"
+        f"🔑 Логин: {context.user_data['emp_login']}\n"
+        f"🔒 Пароль: {password}\n"
+        f"🌐 Вход: https://almgp33.kz/manager/login",
+        reply_markup=EMP_ACTIONS_MARKUP
+    )
+    return EMP_ACTION
+
+async def emp_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async with async_session() as session:
+        res = await session.execute(select(ChatManager).order_by(ChatManager.id))
+        emps = res.scalars().all()
+    
+    if not emps:
+        await update.message.reply_text("📭 Нет зарегистрированных сотрудников.")
+        return
+    
+    await update.message.reply_text("👥 Список сотрудников CRM:")
+    for emp in emps:
+        role_str = "👑 Админ" if emp.role == "admin" else "👨‍💻 Менеджер"
+        msg = f"{role_str}\n👤 {emp.name}\n🔑 Логин: {emp.username}"
+        
+        keyboard = [
+            [InlineKeyboardButton("🔑 Изменить пароль", callback_data=f"emppass_{emp.id}")],
+            [InlineKeyboardButton("🗑 Удалить", callback_data=f"empdel_{emp.id}")]
+        ]
+        await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def emp_change_pass_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    emp_id = int(query.data.split("_")[1])
+    context.user_data['edit_emp_id'] = emp_id
+    await query.message.reply_text("🔒 Введите новый пароль для этого сотрудника:", reply_markup=CANCEL_MARKUP)
+    return EMP_WAIT_NEW_PASS
+
+async def emp_save_new_pass(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    new_pass = update.message.text
+    emp_id = context.user_data.get('edit_emp_id')
+    if emp_id:
+        async with async_session() as session:
+            await session.execute(sql_update(ChatManager).where(ChatManager.id == emp_id).values(password=new_pass))
+            await session.commit()
+        await update.message.reply_text("✅ Пароль успешно изменен!", reply_markup=EMP_ACTIONS_MARKUP)
+    return EMP_ACTION
 
 # === НОВОСТИ (ШАГИ) ===
 async def news_title_ru(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -267,10 +355,7 @@ async def handle_schedule_upload(update: Update, context: ContextTypes.DEFAULT_T
         df.columns = df.columns.astype(str).str.strip()
         
         rename_map = {
-            'ФИО': 'name', 
-            'Должность': 'role', 
-            'Кабинет': 'cabinet',
-            'Отделение': 'dept',
+            'ФИО': 'name', 'Должность': 'role', 'Кабинет': 'cabinet', 'Отделение': 'dept',
             'ПН': 'mon', 'ВТ': 'tue', 'СР': 'wed', 'ЧТ': 'thu', 'ПТ': 'fri'
         }
         df.rename(columns=rename_map, inplace=True)
@@ -287,15 +372,9 @@ async def handle_schedule_upload(update: Update, context: ContextTypes.DEFAULT_T
             count = 0
             for _, row in df.iterrows():
                 doctor = Schedule(
-                    name=str(row.get('name', '-')),
-                    role=str(row.get('role', '-')),
-                    cabinet=str(row.get('cabinet', '-')),
-                    dept=str(row.get('dept', '-')),
-                    mon=str(row.get('mon', '-')),
-                    tue=str(row.get('tue', '-')),
-                    wed=str(row.get('wed', '-')),
-                    thu=str(row.get('thu', '-')),
-                    fri=str(row.get('fri', '-'))
+                    name=str(row.get('name', '-')), role=str(row.get('role', '-')), cabinet=str(row.get('cabinet', '-')),
+                    dept=str(row.get('dept', '-')), mon=str(row.get('mon', '-')), tue=str(row.get('tue', '-')),
+                    wed=str(row.get('wed', '-')), thu=str(row.get('thu', '-')), fri=str(row.get('fri', '-'))
                 )
                 session.add(doctor)
                 count += 1
@@ -374,14 +453,10 @@ async def show_list(update, category, title_ru):
     for item in items:
         info = f"🆔 {item.id}\n"
         
-        if category == 'news': 
-            info += f"📰 {item.title}"
-        elif category == 'videos': 
-            info += f"🎥 {item.title}"
-        elif category == 'reviews': 
-            info += f"👤 {item.name}: {item.text[:50]}..."
+        if category == 'news': info += f"📰 {item.title}"
+        elif category == 'videos': info += f"🎥 {item.title}"
+        elif category == 'reviews': info += f"👤 {item.name}: {item.text[:50]}..."
         elif category == 'appeals':
-            # Специфичный вывод для обращений
             status = "✅ Опубликовано" if item.approved else "⏳ На проверке"
             cat_icon = {"thanks": "🙏", "complaint": "😡", "proposal": "💡"}.get(item.category, "❓")
             info += f"{cat_icon} {status}\n👤 {item.name}\n📝 {item.text[:100]}..."
@@ -393,12 +468,10 @@ async def show_list(update, category, title_ru):
 async def docs_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "📂 <b>Раздел документов</b>\nВыберите категорию сайта, куда хотите добавить или удалить документ:", 
-        reply_markup=DOC_CATS_MARKUP,
-        parse_mode="HTML"
+        reply_markup=DOC_CATS_MARKUP, parse_mode="HTML"
     )
     return DOC_CATEGORY_SELECT
 
-# === ВЫБОР КАТЕГОРИИ ===
 async def docs_category_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     if text not in DOC_CATEGORIES:
@@ -409,23 +482,16 @@ async def docs_category_chosen(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data['doc_category_code'] = cat_code
     context.user_data['doc_category_name'] = text
     
-    # Сразу показываем список текущих документов с кнопками удаления
     await show_docs_list(update, cat_code, text)
-    
     await update.message.reply_text(
-        f"Выбрана категория: <b>{text}</b>.\n"
-        "Чтобы добавить новый документ, нажмите кнопку ниже.",
-        reply_markup=DOC_ACTIONS_MARKUP,
-        parse_mode="HTML"
+        f"Выбрана категория: <b>{text}</b>.\nЧтобы добавить новый документ, нажмите кнопку ниже.",
+        reply_markup=DOC_ACTIONS_MARKUP, parse_mode="HTML"
     )
     return DOC_ACTION
 
-# === СПИСОК ДОКУМЕНТОВ ===
 async def show_docs_list(update, cat_code, cat_name):
     async with async_session() as session:
-        result = await session.execute(
-            select(Document).where(Document.category == cat_code).order_by(Document.id.desc())
-        )
+        result = await session.execute(select(Document).where(Document.category == cat_code).order_by(Document.id.desc()))
         docs = result.scalars().all()
         
     if not docs:
@@ -433,35 +499,26 @@ async def show_docs_list(update, cat_code, cat_name):
     else:
         await update.message.reply_text(f"📂 Документы в «{cat_name}»:")
         for doc in docs:
-            # Иконка по типу
             icon = "📄"
             if "pdf" in doc.file_type: icon = "📕"
             elif "xls" in doc.file_type: icon = "📊"
             elif "doc" in doc.file_type: icon = "📘"
 
             msg = f"{icon} <b>{doc.title}</b>\n🗓 {doc.date}"
-            
             keyboard = [[InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_doc_{doc.id}")]]
             await update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
-# === ОБРАБОТКА ДЕЙСТВИЯ ===
 async def docs_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     if text == "📤 Загрузить файл":
-        await update.message.reply_text(
-            "📎 Отправьте мне файл (PDF, Word, Excel, Картинку).",
-            reply_markup=CANCEL_MARKUP
-        )
+        await update.message.reply_text("📎 Отправьте мне файл (PDF, Word, Excel, Картинку).", reply_markup=CANCEL_MARKUP)
         return DOC_UPLOAD_FILE
     elif text == "⬅️ Назад к категориям":
         return await docs_start(update, context)
     else:
-        # Если нажали "Главное меню" или что-то левое
         return await start(update, context)
 
-# === ЗАГРУЗКА ФАЙЛА ===
 async def docs_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Получаем файл (документ или фото)
     file_obj = None
     file_name = "unknown_file"
     file_mime = ""
@@ -479,59 +536,44 @@ async def docs_file_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Это не файл. Пожалуйста, прикрепите документ.")
         return DOC_UPLOAD_FILE
 
-    # Скачиваем
     save_dir = os.path.join(UPLOADS_DIR, "docs")
     if not os.path.exists(save_dir): os.makedirs(save_dir)
     
-    # Генерируем уникальное имя, чтобы не перезатереть
     ext = os.path.splitext(file_name)[1]
     safe_name = f"{uuid.uuid4()}{ext}"
     file_path = os.path.join(save_dir, safe_name)
     
     await file_obj.download_to_drive(file_path)
     
-    # Сохраняем во временное хранилище
     context.user_data['new_doc_path'] = f"/uploads/docs/{safe_name}"
     context.user_data['new_doc_ext'] = ext.replace(".", "").upper()
     context.user_data['new_doc_original_name'] = file_name
 
     await update.message.reply_text(
-        f"✅ Файл получен: {file_name}\n"
-        "Введите красивое название для сайта (или нажмите «Оставить имя файла»):",
+        f"✅ Файл получен: {file_name}\nВведите красивое название для сайта (или нажмите «Оставить имя файла»):",
         reply_markup=SKIP_TITLE_MARKUP
     )
     return DOC_TITLE_INPUT
 
-# === НАЗВАНИЕ И СОХРАНЕНИЕ ===
 async def docs_save_finish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
-    
-    final_title = text
-    if text == "👌 Оставить имя файла":
-        final_title = context.user_data['new_doc_original_name']
-    
+    final_title = text if text != "👌 Оставить имя файла" else context.user_data['new_doc_original_name']
     cat_code = context.user_data['doc_category_code']
     
     async with async_session() as session:
         new_doc = Document(
-            title=final_title,
-            file_path=context.user_data['new_doc_path'],
-            file_type=context.user_data['new_doc_ext'],
-            category=cat_code,
+            title=final_title, file_path=context.user_data['new_doc_path'],
+            file_type=context.user_data['new_doc_ext'], category=cat_code,
             date=update.message.date.strftime("%d.%m.%Y")
         )
         session.add(new_doc)
         await session.commit()
     
     await update.message.reply_text("✅ Документ опубликован!", reply_markup=DOC_ACTIONS_MARKUP)
-    
-    # Обновляем список, чтобы админ увидел результат
     await show_docs_list(update, cat_code, context.user_data['doc_category_name'])
-    
     return DOC_ACTION
 
-
-# === ОБРАБОТЧИК КНОПОК ===
+# === ОБРАБОТЧИК ИНЛАЙН-КНОПОК ===
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -539,59 +581,44 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = parts[0]
     
     async with async_session() as session:
-        # 1. ПУБЛИКАЦИЯ ОБРАЩЕНИЯ (Appeals)
         if action == "pub":
             iid = int(parts[1])
             await session.execute(sql_update(Appeal).where(Appeal.id == iid).values(approved=True))
             await session.commit()
             await query.edit_message_text("✅ Обращение опубликовано на сайте.")
             
-        # 2. ОДОБРЕНИЕ ОТЗЫВА (Reviews)
         elif action == "approve":
             iid = int(parts[1])
             await session.execute(sql_update(Review).where(Review.id == iid).values(approved=True))
             await session.commit()
             await query.edit_message_text("✅ Одобрено.")
             
-        # 3. УДАЛЕНИЕ (УНИВЕРСАЛЬНОЕ)
+        elif action == "empdel":
+            iid = int(parts[1])
+            await session.execute(delete(ChatManager).where(ChatManager.id == iid))
+            await session.commit()
+            await query.edit_message_text("🗑 Сотрудник удален.")
+            
         elif action == "reject" or action == "delete":
-            # Спец. логика для документов: удаляем файл с диска
             if action == "delete" and len(parts) > 2 and parts[1] == "doc":
                 doc_id = int(parts[2])
-                # Ищем документ, чтобы узнать путь
                 res = await session.execute(select(Document).where(Document.id == doc_id))
                 doc = res.scalar_one_or_none()
-                
                 if doc:
-                    # Удаляем файл физически
                     try:
-                        # doc.file_path начинается с /uploads/..., убираем слеш для os.path.join
                         relative_path = doc.file_path.lstrip("/")
                         full_path = os.path.join(BASE_DIR, relative_path)
-                        if os.path.exists(full_path):
-                            os.remove(full_path)
-                    except Exception as e:
-                        print(f"Ошибка удаления файла с диска: {e}")
-
-                    # Удаляем запись из БД
+                        if os.path.exists(full_path): os.remove(full_path)
+                    except Exception as e: print(f"Ошибка удаления файла с диска: {e}")
                     await session.delete(doc)
                     await session.commit()
                     await query.edit_message_text("🗑 Документ удален.")
                 else:
                     await query.edit_message_text("❌ Документ уже удален.")
                 return
-
-            # Логика для остальных (News, Video, Review, Vacancy, Appeal)
-            # Форматы: 
-            #   reject_{id} (только отзывы) -> cat="reviews"
-            #   delete_{cat}_{id} (остальные)
             
-            if action == "delete":
-                cat = parts[1]
-                iid = int(parts[2])
-            else:
-                cat = "reviews"
-                iid = int(parts[1])
+            if action == "delete": cat = parts[1]; iid = int(parts[2])
+            else: cat = "reviews"; iid = int(parts[1])
             
             model = None
             if cat == "reviews": model = Review
@@ -604,11 +631,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await session.execute(delete(model).where(model.id == iid))
                 await session.commit()
                 msg = "❌ Отклонено." if action == "reject" else "🗑 Удалено."
-                # Пытаемся редактировать, если сообщение не слишком старое
-                try:
-                    await query.edit_message_text(msg)
-                except Exception:
-                    pass
+                try: await query.edit_message_text(msg)
+                except Exception: pass
 
 # === ЗАПУСК ===
 if __name__ == "__main__":
@@ -622,10 +646,8 @@ if __name__ == "__main__":
         .build()
     )
     
-    # Фильтры
     cancel_filter = filters.Regex("^❌ Отмена$")
     skip_filter = filters.Regex("^⏭ Пропустить фото$")
-    # Фильтр для входа в меню документов
     docs_filter = filters.Regex("^📂 Управление документами$")
 
     conv_handler = ConversationHandler(
@@ -633,56 +655,54 @@ if __name__ == "__main__":
             CommandHandler('start', start),
             MessageHandler(filters.Regex("^💼 Вакансии"), start_vacancy),
             MessageHandler(filters.Regex("^📋 Список вакансий"), list_vacancies),
-            # Вход в управление документами
             MessageHandler(docs_filter, docs_start),
         ],
         states={
-            # ГЛАВНОЕ МЕНЮ
-            CHOOSING_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, choose_action)],
+            CHOOSING_ACTION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, choose_action),
+                CallbackQueryHandler(emp_change_pass_start, pattern="^emppass_")
+            ],
             
-            # ГРАФИК
             WAITING_SCHEDULE: [
                 MessageHandler(filters.Document.FileExtension("xlsx"), handle_schedule_upload),
                 MessageHandler(cancel_filter, cancel)
             ],
             
-            # НОВОСТИ
             NEWS_TITLE_RU: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, news_title_ru)],
             NEWS_TITLE_KZ: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, news_title_kz)],
             NEWS_TEXT_RU:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, news_text_ru)],
             NEWS_TEXT_KZ:  [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, news_text_kz)],
             NEWS_PHOTO: [
-                MessageHandler(filters.PHOTO, news_photo_handler),
-                MessageHandler(filters.Document.IMAGE, news_photo_handler), 
-                MessageHandler(skip_filter, news_skip_photo),
-                MessageHandler(filters.ALL & ~cancel_filter, news_photo_handler)
+                MessageHandler(filters.PHOTO | filters.Document.IMAGE | filters.ALL & ~cancel_filter, news_photo_handler),
+                MessageHandler(skip_filter, news_skip_photo)
             ],
             
-            # ВИДЕО
             VIDEO_TITLE_RU: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, video_title_ru)],
             VIDEO_TITLE_KZ: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, video_title_kz)],
             VIDEO_URL:      [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, video_finish)],
 
-            # ВАКАНСИИ
             WAITING_VACANCY_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, vacancy_title)],
             WAITING_VACANCY_SALARY: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, vacancy_salary)],
             WAITING_VACANCY_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, vacancy_finish)],
 
-            # === ДОКУМЕНТЫ (НОВОЕ) ===
-            DOC_CATEGORY_SELECT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, docs_category_chosen)
-            ],
-            DOC_ACTION: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, docs_action)
-            ],
+            DOC_CATEGORY_SELECT: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, docs_category_chosen)],
+            DOC_ACTION: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, docs_action)],
             DOC_UPLOAD_FILE: [
-                # Принимаем документы ИЛИ фото (если это скан)
                 MessageHandler(filters.Document.ALL | filters.PHOTO, docs_file_handler),
                 MessageHandler(cancel_filter, cancel)
             ],
-            DOC_TITLE_INPUT: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, docs_save_finish)
+            DOC_TITLE_INPUT: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, docs_save_finish)],
+
+            # === СОТРУДНИКИ ===
+            EMP_ACTION: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, emp_action_chosen),
+                CallbackQueryHandler(emp_change_pass_start, pattern="^emppass_")
             ],
+            EMP_ROLE: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, emp_role_chosen)],
+            EMP_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, emp_name_entered)],
+            EMP_LOGIN: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, emp_login_entered)],
+            EMP_PASS: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, emp_pass_entered)],
+            EMP_WAIT_NEW_PASS: [MessageHandler(filters.TEXT & ~filters.COMMAND & ~cancel_filter, emp_save_new_pass)],
         },
         fallbacks=[
             CommandHandler('cancel', cancel),
@@ -693,6 +713,6 @@ if __name__ == "__main__":
     
     app.add_handler(conv_handler)
     app.add_handler(CallbackQueryHandler(callback_handler))
-    
-    print("Бот перезапущен (v4 - Documents & Appeals)...")
+
+    print("Бот перезапущен (v5 - Employee CRM Management)...")
     app.run_polling()

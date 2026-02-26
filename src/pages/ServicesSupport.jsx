@@ -10,12 +10,9 @@ import {
   Send,
   Loader2,
 } from "lucide-react";
-
+import { API_URL } from "../config";
 export default function ServicesSupport() {
   const { lang } = useOutletContext();
-
-  // 👇 АДРЕС ВАШЕГО БЭКЕНДА
-  const API_URL = "https://almgp33.kz";
 
   // Состояния формы
   const [formData, setFormData] = useState({

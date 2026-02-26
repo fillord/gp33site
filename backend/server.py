@@ -1,6 +1,9 @@
 import os
+import json
+import uuid
+import jwt
 import requests
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -14,7 +17,7 @@ from fastapi.responses import FileResponse
 from database import init_models, get_db
 # Импортируем Appeal
 from models import Review as ReviewModel, News as NewsModel, Video as VideoModel, Schedule as ScheduleModel, Vacancy as VacancyModel, Appeal as AppealModel
-from models import Document as DocumentModel
+from models import Document as DocumentModel, ChatSession, ChatMessage, ChatManager
 
 load_dotenv()
 
@@ -62,6 +65,13 @@ class FeedbackSchema(BaseModel):
     phone: str
     message: str
     category: Optional[str] = "Обращение"
+
+SECRET_KEY = "23862369789" # Секретный ключ для шифрования
+ALGORITHM = "HS256"
+
+class ManagerLoginSchema(BaseModel):
+    username: str
+    password: str
 
 # === API ===
 
@@ -244,6 +254,274 @@ async def download_document(doc_id: int, db: AsyncSession = Depends(get_db)):
         filename=filename, 
         media_type='application/octet-stream'
     )
+
+# === WEBSOCKETS CHAT MANAGER ===
+class ConnectionManager:
+    def __init__(self):
+        # Храним активные соединения: { session_token: [websocket_client, websocket_manager] }
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, session_token: str):
+        await websocket.accept()
+        if session_token not in self.active_connections:
+            self.active_connections[session_token] = []
+        self.active_connections[session_token].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, session_token: str):
+        if session_token in self.active_connections:
+            self.active_connections[session_token].remove(websocket)
+            if not self.active_connections[session_token]:
+                del self.active_connections[session_token]
+
+    async def broadcast_to_session(self, session_token: str, message: dict):
+        if session_token in self.active_connections:
+            for connection in self.active_connections[session_token]:
+                await connection.send_text(json.dumps(message))
+
+chat_manager = ConnectionManager()
+
+# Эндпоинт для старта новой сессии клиентом
+class StartChatSchema(BaseModel):
+    name: str
+    phone: str
+
+@app.post("/api/chat/start")
+async def start_chat(data: StartChatSchema, db: AsyncSession = Depends(get_db)):
+    session_token = str(uuid.uuid4())
+    
+    new_session = ChatSession(
+        session_token=session_token,
+        user_name=data.name,
+        user_phone=data.phone,
+        status="open"
+    )
+    db.add(new_session)
+    await db.commit()
+    
+    msg_text = f"🚨 <b>НОВЫЙ ЧАТ С САЙТА</b>\n👤 Имя: {data.name}\n📞 Тел: {data.phone}"
+    keyboard = {
+        "inline_keyboard": [[
+            {"text": "💬 Открыть чат", "web_app": {"url": f"https://almgp33.kz/manager/chat/{session_token}"}}
+        ]]
+    }
+    
+    # 1. Получаем всех зарегистрированных менеджеров из БД
+    mgr_result = await db.execute(select(ChatManager))
+    managers = mgr_result.scalars().all()
+    
+    # 2. Собираем уникальный список Telegram ID (Менеджеры + Главный Админ)
+    chat_ids = set([m.telegram_id for m in managers if m.telegram_id])
+    if ADMIN_CHAT_ID:
+        chat_ids.add(ADMIN_CHAT_ID)
+        
+    # 3. Рассылаем уведомление ВСЕМ сотрудникам
+    for tg_id in chat_ids:
+        try:
+            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={
+                "chat_id": tg_id,
+                "text": msg_text,
+                "parse_mode": "HTML",
+                "reply_markup": keyboard
+            }, timeout=5)
+        except Exception as e:
+            print(f"Ошибка отправки менеджеру {tg_id}: {e}")
+
+    return {"session_token": session_token}
+
+@app.websocket("/ws/chat/{session_token}")
+async def websocket_chat(websocket: WebSocket, session_token: str, db: AsyncSession = Depends(get_db)):
+    # 1. Проверяем, существует ли сессия
+    result = await db.execute(select(ChatSession).where(ChatSession.session_token == session_token))
+    session = result.scalar_one_or_none()
+    
+    if not session or session.status == "closed":
+        await websocket.close(code=1008) # Закрываем соединение, если чат завершен
+        return
+
+    # 2. Подключаем клиента
+    await chat_manager.connect(websocket, session_token)
+    try:
+        while True:
+            # 3. Ждем сообщение
+            data = await websocket.receive_text()
+            message_data = json.loads(data) # Ожидаем {"sender": "client", "text": "..."}
+            
+            # 4. Сохраняем в БД
+            new_msg = ChatMessage(
+                session_id=session.id,
+                sender=message_data.get("sender", "client"),
+                text=message_data.get("text", "")
+            )
+            db.add(new_msg)
+            await db.commit()
+            
+            # 5. Рассылаем всем в этой сессии (клиенту и менеджеру)
+            await chat_manager.broadcast_to_session(session_token, {
+                "sender": new_msg.sender,
+                "text": new_msg.text,
+                "timestamp": new_msg.timestamp.strftime("%H:%M")
+            })
+    except WebSocketDisconnect:
+        chat_manager.disconnect(websocket, session_token)
+
+# Эндпоинт для получения истории (если пациент обновил страницу)
+@app.get("/api/chat/history/{session_token}")
+async def get_chat_history(session_token: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ChatSession).where(ChatSession.session_token == session_token))
+    session = result.scalar_one_or_none()
+    
+    if not session:
+        return {"error": "Session not found", "messages": []}
+        
+    msg_result = await db.execute(select(ChatMessage).where(ChatMessage.session_id == session.id).order_by(ChatMessage.id))
+    messages = msg_result.scalars().all()
+    
+    return {
+        "status": session.status,
+        "messages": [{"sender": m.sender, "text": m.text, "timestamp": m.timestamp.strftime("%H:%M")} for m in messages]
+    }
+
+# Эндпоинт для закрытия чата менеджером
+@app.post("/api/chat/close/{session_token}")
+async def close_chat(session_token: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ChatSession).where(ChatSession.session_token == session_token))
+    session = result.scalar_one_or_none()
+    
+    if not session:
+        return {"error": "Session not found"}
+        
+    session.status = "closed"
+    await db.commit()
+    
+    # Отправляем системное сообщение в сокет, чтобы клиент понял, что чат закрыт
+    await chat_manager.broadcast_to_session(session_token, {
+        "sender": "system",
+        "text": "Менеджер завершил диалог. Вопрос решен.",
+        "timestamp": datetime.now().strftime("%H:%M")
+    })
+    
+    return {"status": "closed"}
+
+# 1. ЗАЩИЩЕННАЯ АВТОРИЗАЦИЯ
+@app.post("/api/manager/auth")
+async def manager_auth(data: ManagerLoginSchema, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(ChatManager).where(
+            ChatManager.username == data.username, 
+            ChatManager.password == data.password
+        )
+    )
+    manager = result.scalar_one_or_none()
+    
+    if not manager:
+        raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+        
+    # Генерируем настоящий JWT токен
+    token = jwt.encode(
+        {"sub": str(manager.id), "role": manager.role, "name": manager.name}, 
+        SECRET_KEY, 
+        algorithm=ALGORITHM
+    )
+    
+    return {
+        "token": token,
+        "name": manager.name,
+        "role": manager.role
+    }
+
+# 2. ЗАЩИЩЕННОЕ ПОЛУЧЕНИЕ ЧАТОВ (Только с токеном)
+@app.get("/api/manager/chats/active")
+async def get_active_chats(authorization: str = Header(None), db: AsyncSession = Depends(get_db)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Отсутствует токен")
+    
+    # Расшифровываем токен (проверка)
+    token = authorization.split(" ")[1]
+    try:
+        jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except:
+        raise HTTPException(status_code=401, detail="Неверный токен")
+
+    result = await db.execute(select(ChatSession).where(ChatSession.status == "open").order_by(ChatSession.created_at.desc()))
+    sessions = result.scalars().all()
+    
+    return [{
+        "session_token": s.session_token,
+        "name": s.user_name,
+        "phone": s.user_phone,
+        "time": s.created_at.strftime("%H:%M"),
+        "manager_id": s.manager_id,     # Добавили ID
+        "manager_name": s.manager_name  # Добавили Имя
+    } for s in sessions]
+
+# 3. ПРИНЯТЬ ЧАТ В РАБОТУ
+@app.post("/api/manager/chats/{session_token}/accept")
+async def accept_chat(session_token: str, authorization: str = Header(None), db: AsyncSession = Depends(get_db)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401)
+    
+    token_str = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token_str, SECRET_KEY, algorithms=[ALGORITHM])
+        manager_id = int(payload.get("sub"))
+        manager_name = payload.get("name")
+    except Exception:
+        raise HTTPException(status_code=401)
+
+    result = await db.execute(select(ChatSession).where(ChatSession.session_token == session_token))
+    session = result.scalar_one_or_none()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Чат не найден")
+        
+    # Блокировка: если чат уже занят ДРУГИМ менеджером
+    if session.manager_id and session.manager_id != manager_id:
+        raise HTTPException(status_code=400, detail=f"Чат уже принял(а) {session.manager_name}")
+
+    # Присваиваем чат текущему менеджеру
+    session.manager_id = manager_id
+    session.manager_name = manager_name
+    await db.commit()
+    
+    # Уведомляем пациента в сокет
+    from datetime import datetime
+    await chat_manager.broadcast_to_session(session_token, {
+        "sender": "system",
+        "text": "К диалогу подключился специалист. Пожалуйста, ожидайте ответа.",
+        "timestamp": datetime.now().strftime("%H:%M")
+    })
+    
+    return {"status": "success"}
+
+# 4. ПОЛУЧЕНИЕ ИСТОРИИ ВСЕХ ЧАТОВ ДЛЯ АДМИНА
+@app.get("/api/admin/chats/history")
+async def get_all_chats_history(authorization: str = Header(None), db: AsyncSession = Depends(get_db)):
+    # 1. Проверяем наличие токена
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Отсутствует токен")
+    
+    # 2. Расшифровываем токен и проверяем роль
+    token = authorization.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("role") != "admin":
+            raise HTTPException(status_code=403, detail="Доступ запрещен. Только для администраторов.")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Неверный токен")
+
+    # 3. Если всё ок, отдаем историю
+    result = await db.execute(select(ChatSession).order_by(ChatSession.created_at.desc()))
+    sessions = result.scalars().all()
+    
+    return [{
+        "session_token": s.session_token,
+        "name": s.user_name,
+        "phone": s.user_phone,
+        "status": s.status,
+        "manager_name": s.manager_name or "Не назначен",
+        "date": s.created_at.strftime("%d.%m.%Y"),
+        "time": s.created_at.strftime("%H:%M")
+    } for s in sessions]
 
 # Убедитесь, что папка для документов создается
 DOCS_DIR = os.path.join(UPLOADS_DIR, "docs")

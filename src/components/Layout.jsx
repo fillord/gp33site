@@ -15,7 +15,7 @@ import {
   FileText,
 } from "lucide-react";
 import { pagesData } from "../data/pagesData"; // Импортируем статические данные
-
+import ChatWidget from "./ChatWidget";
 // === СЛОВАРЬ ===
 const translations = {
   ru: {
@@ -188,9 +188,7 @@ const getLinkByKey = (key) => {
   return "/"; // Fallback
 };
 
-const API_URL = import.meta.env.DEV
-  ? "http://localhost:8000"
-  : "https://almgp33.kz";
+import { API_URL } from "../config";
 
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1113,6 +1111,7 @@ export default function Layout() {
           </div>
         </div>
       </footer>
+      <ChatWidget />
     </div>
   );
 }
