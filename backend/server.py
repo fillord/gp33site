@@ -61,7 +61,7 @@ class FeedbackSchema(BaseModel):
     name: str
     phone: str
     message: str
-    category: str
+    category: Optional[str] = "Обращение"
 
 # === API ===
 
@@ -123,7 +123,7 @@ async def get_vacancies(db: AsyncSession = Depends(get_db)):
 # 2. ОТПРАВКА ОБРАЩЕНИЯ (Сохранение + ТГ)
 @app.post("/api/feedback")
 async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)):
-    # 1. Сохраняем
+    # 1. Сохраняем в базу данных
     new_appeal = AppealModel(
         name=data.name,
         phone=data.phone,
@@ -136,12 +136,14 @@ async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)
     await db.commit()
     await db.refresh(new_appeal)
 
-    # 2. Текст для админа
-    cat_ru = {
-        "thanks": "🙏 Благодарность",
-        "complaint": "😡 Жалоба",
-        "proposal": "💡 Предложение"
-    }.get(data.category, data.category)
+    # 2. Перевод категорий для красивого сообщения в Телеграм
+    category_map = {
+        "Blagodarnost": "🙏 Благодарность",
+        "Jaloba": "😡 Жалоба",
+        "Predlozhenie": "💡 Предложение",
+        "Служба Поддержки": "🚑 Служба Поддержки"
+    }
+    cat_ru = category_map.get(data.category, data.category)
 
     msg_text = (
         f"🚨 <b>НОВОЕ ОБРАЩЕНИЕ #{new_appeal.id}</b>\n"
@@ -151,10 +153,10 @@ async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)
         f"📝 <b>Сообщение:</b>\n{data.message}"
     )
 
-    # 3. Кнопки
-    # ВАЖНО: Используем 'delete_appeals_{id}', чтобы совпадало с логикой бота
+    # 👇 3. САМОЕ ГЛАВНОЕ: УМНЫЕ КНОПКИ 👇
     reply_markup = None
-    if data.category != "proposal":
+    # Кнопки добавятся ТОЛЬКО если это Жалоба или Благодарность (из Блога Главврача)
+    if data.category in ["Blagodarnost", "Jaloba"]:
         reply_markup = {
             "inline_keyboard": [[
                 {"text": "✅ Опубликовать", "callback_data": f"pub_{new_appeal.id}"},
@@ -169,6 +171,8 @@ async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)
             "text": msg_text,
             "parse_mode": "HTML"
         }
+        
+        # Если кнопки есть — прикрепляем их. Если нет — сообщение уходит просто текстом.
         if reply_markup:
             payload["reply_markup"] = reply_markup
             
