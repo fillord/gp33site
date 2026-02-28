@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import asyncio
 import jwt
 import requests
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, Header, HTTPException
@@ -326,9 +327,10 @@ async def start_chat(data: StartChatSchema, db: AsyncSession = Depends(get_db)):
             print(f"Ошибка отправки менеджеру {tg_id}: {e}")
 
     return {"session_token": session_token}
-
 @app.websocket("/ws/chat/{session_token}")
 async def websocket_chat(websocket: WebSocket, session_token: str, db: AsyncSession = Depends(get_db)):
+    import asyncio # Добавлено для небольшой паузы перед ответом бота
+
     # 1. Проверяем, существует ли сессия
     result = await db.execute(select(ChatSession).where(ChatSession.session_token == session_token))
     session = result.scalar_one_or_none()
@@ -345,31 +347,67 @@ async def websocket_chat(websocket: WebSocket, session_token: str, db: AsyncSess
             data = await websocket.receive_text()
             message_data = json.loads(data) 
             
-            # 👇 НОВАЯ МАГИЯ UX: Проверяем тип события 👇
+            # 👇 МАГИЯ UX: Проверяем тип события (печатает/прочитал) 👇
             if message_data.get("type") in ["typing", "read"]:
-                # Пересылаем статус (печатает или прочитал) собеседнику
                 await chat_manager.broadcast_to_session(session_token, {
                     "type": message_data.get("type"),
                     "sender": message_data.get("sender")
                 })
                 continue
 
-            # Старая логика: сохраняем РЕАЛЬНОЕ сообщение в БД
+            # Сохраняем РЕАЛЬНОЕ сообщение клиента в БД
+            client_text = message_data.get("text", "")
             new_msg = ChatMessage(
                 session_id=session.id,
                 sender=message_data.get("sender", "client"),
-                text=message_data.get("text", "")
+                text=client_text
             )
             db.add(new_msg)
             await db.commit()
             
             # Рассылаем всем готовое сообщение
             await chat_manager.broadcast_to_session(session_token, {
-                "type": "message", # Указываем, что это текст, а не анимация
+                "type": "message",
                 "sender": new_msg.sender,
                 "text": new_msg.text,
                 "timestamp": new_msg.timestamp.strftime("%H:%M")
             })
+
+            # 👇 НОВАЯ МАГИЯ БОТА-ПОМОЩНИКА 👇
+            if new_msg.sender == "client":
+                bot_reply = None
+                
+                # Проверяем на что нажал пациент
+                if client_text == "🕒 График работы":
+                    bot_reply = "🤖 Наш график работы:\nПН-ПТ: с 08:00 до 20:00\nСБ: с 09:00 до 14:00\nВС: Выходной."
+                elif client_text == "💰 Прайс-лист":
+                    bot_reply = "🤖 С актуальными ценами на наши услуги вы можете ознакомиться на сайте в разделе «Услуги и цены»."
+                elif client_text == "📍 Как добраться":
+                    bot_reply = "🤖 Наш адрес: г. Алматы Проспект Райымбека, 263/2"
+                elif client_text == "👨‍⚕️ Связаться с оператором":
+                    bot_reply = "🤖 Перевожу диалог на специалиста. Пожалуйста, ожидайте, первый освободившийся менеджер вам ответит! 🚑"
+
+                # Если бот должен ответить:
+                if bot_reply:
+                    await asyncio.sleep(0.5) # Пауза в полсекунды для реалистичности
+                    
+                    # Сохраняем ответ бота в базу (будто это написал менеджер)
+                    bot_msg = ChatMessage(
+                        session_id=session.id,
+                        sender="manager",
+                        text=bot_reply
+                    )
+                    db.add(bot_msg)
+                    await db.commit()
+                    
+                    # Отправляем ответ пациенту и в CRM менеджера
+                    await chat_manager.broadcast_to_session(session_token, {
+                        "type": "message",
+                        "sender": "manager",
+                        "text": bot_reply,
+                        "timestamp": bot_msg.timestamp.strftime("%H:%M")
+                    })
+
     except WebSocketDisconnect:
         chat_manager.disconnect(websocket, session_token)
 

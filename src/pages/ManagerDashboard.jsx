@@ -523,28 +523,70 @@ function ChatArea({ chat, token, myId, onChatClosed }) {
             <Lock size={16} /> Чат обрабатывает: {chat.manager_name}
           </div>
         ) : (
-          <form onSubmit={sendMessage} className="w-full max-w-3xl flex gap-2">
-            <input
-              type="text"
-              placeholder="Сообщение..."
-              className="flex-1 rounded-full px-6 py-3 border-none shadow-sm focus:ring-2 focus:ring-teal-500 outline-none"
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                if (ws.current)
-                  ws.current.send(
-                    JSON.stringify({ type: "typing", sender: "manager" }),
-                  );
-              }}
-            />
-            <button
-              type="submit"
-              disabled={!text.trim()}
-              className="bg-teal-600 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-teal-700 transition disabled:opacity-50 shrink-0 shadow-sm"
+          <div className="w-full max-w-5xl flex flex-col gap-2">
+            {/* 👇 БЛОК БЫСТРЫХ ОТВЕТОВ МЕНЕДЖЕРА 👇 */}
+            <div
+              className="flex flex-wrap gap-2 max-h-32 overflow-y-auto pb-2"
+              style={{ scrollbarWidth: "thin" }}
             >
-              <Send size={18} className="ml-1" />
-            </button>
-          </form>
+              {[
+                "👋 Здравствуйте! Чем могу вам помочь?",
+                "📝 Для записи, пожалуйста, напишите ваше полное ФИО и ИИН.",
+                "📅 К какому специалисту и на какую дату вы хотели бы записаться?",
+                "✅ Вы успешно записаны! Спасибо за обращение! Будьте здоровы!",
+                "💳 Стоимость первичного приема этого специалиста составляет: ",
+                "🩸 Сдать анализы можно по живой очереди в ПН-ПТ с 08:00 до 11:00. Обязательно натощак!",
+                "📍 Мы находимся по адресу: горд Алматы Проспект Райымбека, 263/2. Главный вход со стороны улицы Райымбека.",
+                "🙏 Приносим извинения за ожидание! Линия перегружена. Ваш вопрос: ",
+                "✅ Ваш вопрос решен. Спасибо за обращение! Будьте здоровы!",
+              ].map((reply, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    // Если шаблон требует дописывания (заканчивается на двоеточие или пробел), вставляем в поле ввода
+                    if (reply.endsWith(": ") || reply.endsWith("...")) {
+                      setText(reply);
+                    } else {
+                      // Иначе отправляем сразу
+                      if (ws.current) {
+                        ws.current.send(
+                          JSON.stringify({ sender: "manager", text: reply }),
+                        );
+                      }
+                    }
+                  }}
+                  className="text-[11px] font-medium bg-white border border-teal-200 text-teal-700 px-3 py-1.5 rounded-full shadow-sm hover:bg-teal-50 transition-colors text-left"
+                >
+                  {reply}
+                </button>
+              ))}
+            </div>
+            {/* 👆 КОНЕЦ БЛОКА ШАБЛОНОВ 👆 */}
+
+            <form onSubmit={sendMessage} className="flex gap-2 w-full">
+              <input
+                type="text"
+                placeholder="Сообщение..."
+                className="flex-1 rounded-full px-6 py-3 border-none shadow-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  if (ws.current)
+                    ws.current.send(
+                      JSON.stringify({ type: "typing", sender: "manager" }),
+                    );
+                }}
+              />
+              <button
+                type="submit"
+                disabled={!text.trim()}
+                className="bg-teal-600 text-white w-12 h-12 rounded-full flex items-center justify-center hover:bg-teal-700 transition disabled:opacity-50 shrink-0 shadow-sm"
+              >
+                <Send size={18} className="ml-1" />
+              </button>
+            </form>
+          </div>
         )}
       </div>
     </div>

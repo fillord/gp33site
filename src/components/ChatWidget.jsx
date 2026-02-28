@@ -241,31 +241,59 @@ export default function ChatWidget() {
 
           {/* Ввод сообщения */}
           {sessionToken && (
-            <form
-              onSubmit={sendMessage}
-              className="p-3 bg-white border-t flex gap-2"
-            >
-              <input
-                type="text"
-                className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-teal-500"
-                placeholder="Введите сообщение..."
-                value={message}
-                onChange={(e) => {
-                  setMessage(e.target.value);
-                  if (ws.current)
-                    ws.current.send(
-                      JSON.stringify({ type: "typing", sender: "client" }),
-                    );
-                }}
-              />
-              <button
-                type="submit"
-                className="bg-teal-600 text-white p-2 rounded-full hover:bg-teal-700 transition disabled:opacity-50"
-                disabled={!message.trim()}
+            <>
+              {/* 👇 БЛОК БЫСТРЫХ ОТВЕТОВ (FAQ) 👇 */}
+              <div className="flex flex-wrap gap-2 px-3 py-2 bg-gray-50 border-t border-gray-100">
+                {[
+                  "🕒 График работы",
+                  "💰 Прайс-лист",
+                  "📍 Как добраться",
+                  "👨‍⚕️ Связаться с оператором",
+                ].map((opt, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      if (ws.current) {
+                        ws.current.send(
+                          JSON.stringify({ sender: "client", text: opt }),
+                        );
+                      }
+                    }}
+                    className="text-[11px] font-medium bg-white border border-teal-200 text-teal-700 px-3 py-1.5 rounded-full shadow-sm hover:bg-teal-50 transition-colors shrink-0"
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+              {/* 👆 КОНЕЦ БЛОКА FAQ 👆 */}
+
+              <form
+                onSubmit={sendMessage}
+                className="p-3 bg-white border-t flex gap-2"
               >
-                <Send size={18} className="ml-0.5" />
-              </button>
-            </form>
+                <input
+                  type="text"
+                  className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-teal-500"
+                  placeholder="Введите сообщение..."
+                  value={message}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    if (ws.current)
+                      ws.current.send(
+                        JSON.stringify({ type: "typing", sender: "client" }),
+                      );
+                  }}
+                />
+                <button
+                  type="submit"
+                  className="bg-teal-600 text-white p-2 rounded-full hover:bg-teal-700 transition disabled:opacity-50"
+                  disabled={!message.trim()}
+                >
+                  <Send size={18} />
+                </button>
+              </form>
+            </>
           )}
         </div>
       )}
