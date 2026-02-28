@@ -7,19 +7,22 @@ import { API_BASE_URL } from "../config";
 const WS_BASE_URL = API_BASE_URL.replace(/^http/, "ws");
 
 export default function ChatWidget() {
+  const [isManagerTyping, setIsManagerTyping] = useState(false);
+  const typingTimeout = useRef(null);
+
+  const ws = useRef(null); // <--- Проверь эту!
+  const messagesEndRef = useRef(null); // <--- И особенно вот эту!
+
   const [isOpen, setIsOpen] = useState(false);
   const [sessionToken, setSessionToken] = useState(
     localStorage.getItem("chat_session") || null,
   );
   const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
+  const [message, setMessage] = useState("");
 
   // Форма авторизации
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-
-  const ws = useRef(null);
-  const messagesEndRef = useRef(null);
 
   // Прокрутка вниз при новом сообщении
   const scrollToBottom = () => {
@@ -51,8 +54,37 @@ export default function ChatWidget() {
       // 2. Открываем WebSocket
       ws.current = new WebSocket(`${WS_BASE_URL}/ws/chat/${sessionToken}`);
 
+      // 👇 МАГИЯ 3: Как только пациент открыл чат, отправляем менеджеру сигнал "Прочитано"
+      ws.current.onopen = () => {
+        ws.current.send(JSON.stringify({ type: "read", sender: "client" }));
+      };
+
       ws.current.onmessage = (event) => {
         const newMsg = JSON.parse(event.data);
+
+        if (newMsg.type === "typing") {
+          // ... (тут твой код про typing)
+          return;
+        }
+        if (newMsg.type === "read") {
+          if (newMsg.sender === "manager") {
+            // Ищем все сообщения клиента и ставим им isRead = true
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.sender === "client" ? { ...m, isRead: true } : m,
+              ),
+            );
+          }
+          return;
+        }
+
+        if (newMsg.sender === "manager") {
+          setIsManagerTyping(false);
+          // Отправляем сигнал менеджеру, что мы прочитали его ответ
+          if (ws.current)
+            ws.current.send(JSON.stringify({ type: "read", sender: "client" }));
+        }
+
         setMessages((prev) => [...prev, newMsg]);
 
         // ЕСЛИ МЕНЕДЖЕР ЗАКРЫЛ ЧАТ (СИСТЕМНОЕ СООБЩЕНИЕ)
@@ -93,11 +125,10 @@ export default function ChatWidget() {
 
   const sendMessage = (e) => {
     e.preventDefault();
-    if (!text.trim() || !ws.current) return;
+    if (!message.trim() || !ws.current) return;
 
-    const payload = { sender: "client", text: text.trim() };
-    ws.current.send(JSON.stringify(payload));
-    setText("");
+    ws.current.send(JSON.stringify({ sender: "client", text: message.trim() }));
+    setMessage("");
   };
 
   return (
@@ -181,11 +212,28 @@ export default function ChatWidget() {
                     >
                       {msg.text}
                     </div>
-                    <span className="text-[10px] text-gray-400 mt-1 mx-1">
+                    <span className="text-[10px] text-gray-400 mt-1 mx-1 flex items-center justify-end gap-1">
                       {msg.timestamp}
+                      {/* Показываем галочки только для сообщений пациента */}
+                      {msg.sender === "client" && (
+                        <span
+                          className={
+                            msg.isRead
+                              ? "text-teal-500 font-bold tracking-tighter"
+                              : "text-gray-400"
+                          }
+                        >
+                          {msg.isRead ? "✓✓" : "✓"}
+                        </span>
+                      )}
                     </span>
                   </div>
                 ))}
+                {isManagerTyping && (
+                  <div className="text-xs text-gray-400 italic mb-2 ml-2 flex items-center gap-1">
+                    Специалист печатает...
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </>
             )}
@@ -199,15 +247,21 @@ export default function ChatWidget() {
             >
               <input
                 type="text"
-                placeholder="Сообщение..."
-                className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
+                className="flex-1 border border-gray-200 rounded-full px-4 py-2 text-sm focus:outline-none focus:border-teal-500"
+                placeholder="Введите сообщение..."
+                value={message}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  if (ws.current)
+                    ws.current.send(
+                      JSON.stringify({ type: "typing", sender: "client" }),
+                    );
+                }}
               />
               <button
                 type="submit"
                 className="bg-teal-600 text-white p-2 rounded-full hover:bg-teal-700 transition disabled:opacity-50"
-                disabled={!text.trim()}
+                disabled={!message.trim()}
               >
                 <Send size={18} className="ml-0.5" />
               </button>

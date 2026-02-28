@@ -455,13 +455,35 @@ async def show_list(update, category, title_ru):
         
         if category == 'news': info += f"📰 {item.title}"
         elif category == 'videos': info += f"🎥 {item.title}"
-        elif category == 'reviews': info += f"👤 {item.name}: {item.text[:50]}..."
+        elif category == 'reviews': 
+            status = "✅ Одобрен" if item.approved else "⏳ На проверке"
+            info += f"[{status}]\n👤 {item.name}: {item.text[:50]}..."
         elif category == 'appeals':
-            status = "✅ Опубликовано" if item.approved else "⏳ На проверке"
-            cat_icon = {"thanks": "🙏", "complaint": "😡", "proposal": "💡"}.get(item.category, "❓")
-            info += f"{cat_icon} {status}\n👤 {item.name}\n📝 {item.text[:100]}..."
+            is_support = item.category in ["Служба Поддержки", "support"]
+            # Если это поддержка, статус "Обработано", иначе "Опубликовано"
+            status = "✅ Обработано" if is_support and item.approved else ("✅ Опубликовано" if item.approved else "⏳ Ожидает")
+            
+            cat_text = {
+                "thanks": "🙏 Благодарность", "complaint": "😡 Жалоба", "proposal": "💡 Предложение",
+                "Blagodarnost": "🙏 Благодарность", "Jaloba": "😡 Жалоба", "Predlozhenie": "💡 Предложение",
+                "Служба Поддержки": "🚑 Служба Поддержки"
+            }.get(item.category, f"❓ {item.category}")
+            
+            # Добавил вывод телефона!
+            info += f"📌 Тип: {cat_text}\n📊 Статус: {status}\n👤 {item.name}\n📞 Тел: {item.phone}\n📝 {item.text[:100]}..."
                     
-        keyboard = [[InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_{category}_{item.id}")]]
+        # 👇 ФОРМИРОВАНИЕ КНОПОК ДЛЯ СПИСКА 👇
+        keyboard = []
+        if category == 'reviews' and not item.approved:
+            keyboard.append([InlineKeyboardButton("✅ Одобрить", callback_data=f"approve_{item.id}")])
+        elif category == 'appeals' and not item.approved:
+            if item.category in ["Служба Поддержки", "support"]:
+                keyboard.append([InlineKeyboardButton("✅ Сделано (Архив)", callback_data=f"resolve_{item.id}")])
+            elif item.category not in ["proposal", "Predlozhenie"]:
+                keyboard.append([InlineKeyboardButton("✅ Опубликовать", callback_data=f"pub_{item.id}")])
+                
+        keyboard.append([InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_{category}_{item.id}")])
+        
         await update.message.reply_text(info, reply_markup=InlineKeyboardMarkup(keyboard))
 
 # === ВХОД В РАЗДЕЛ ДОКУМЕНТОВ ===
@@ -586,6 +608,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await session.execute(sql_update(Appeal).where(Appeal.id == iid).values(approved=True))
             await session.commit()
             await query.edit_message_text("✅ Обращение опубликовано на сайте.")
+            
+        # 👇 НОВЫЙ БЛОК ДЛЯ СЛУЖБЫ ПОДДЕРЖКИ 👇
+        elif action == "resolve":
+            iid = int(parts[1])
+            await session.execute(sql_update(Appeal).where(Appeal.id == iid).values(approved=True))
+            await session.commit()
+            await query.edit_message_text("✅ Обращение обработано. Перенесено в архив.")
             
         elif action == "approve":
             iid = int(parts[1])

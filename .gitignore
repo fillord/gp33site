@@ -31,3 +31,4 @@ venv/
 backend/venv/
 __pycache__/
 *.pyc
+*.zip

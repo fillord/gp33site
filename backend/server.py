@@ -133,7 +133,6 @@ async def get_vacancies(db: AsyncSession = Depends(get_db)):
 # 2. ОТПРАВКА ОБРАЩЕНИЯ (Сохранение + ТГ)
 @app.post("/api/feedback")
 async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)):
-    # 1. Сохраняем в базу данных
     new_appeal = AppealModel(
         name=data.name,
         phone=data.phone,
@@ -146,12 +145,10 @@ async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)
     await db.commit()
     await db.refresh(new_appeal)
 
-    # 2. Перевод категорий для красивого сообщения в Телеграм
     category_map = {
-        "Blagodarnost": "🙏 Благодарность",
-        "Jaloba": "😡 Жалоба",
-        "Predlozhenie": "💡 Предложение",
-        "Служба Поддержки": "🚑 Служба Поддержки"
+        "thanks": "🙏 Благодарность", "complaint": "😡 Жалоба", "proposal": "💡 Предложение",
+        "Blagodarnost": "🙏 Благодарность", "Jaloba": "😡 Жалоба", "Predlozhenie": "💡 Предложение",
+        "Служба Поддержки": "🚑 Служба Поддержки", "support": "🚑 Служба Поддержки"
     }
     cat_ru = category_map.get(data.category, data.category)
 
@@ -163,10 +160,19 @@ async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)
         f"📝 <b>Сообщение:</b>\n{data.message}"
     )
 
-    # 👇 3. САМОЕ ГЛАВНОЕ: УМНЫЕ КНОПКИ 👇
+    # 👇 3. УМНЫЕ КНОПКИ ДЛЯ РАЗНЫХ ТИПОВ 👇
     reply_markup = None
-    # Кнопки добавятся ТОЛЬКО если это Жалоба или Благодарность (из Блога Главврача)
-    if data.category in ["Blagodarnost", "Jaloba"]:
+    
+    if data.category in ["Служба Поддержки", "support"]:
+        # Для службы поддержки: "Сделано" (отправит в архив) и "Удалить"
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "✅ Сделано (В архив)", "callback_data": f"resolve_{new_appeal.id}"},
+                {"text": "🗑 Удалить", "callback_data": f"delete_appeals_{new_appeal.id}"} 
+            ]]
+        }
+    elif data.category not in ["proposal", "Predlozhenie"]:
+        # Для благодарностей и жалоб: классические "Опубликовать / Отклонить"
         reply_markup = {
             "inline_keyboard": [[
                 {"text": "✅ Опубликовать", "callback_data": f"pub_{new_appeal.id}"},
@@ -176,16 +182,9 @@ async def send_feedback(data: FeedbackSchema, db: AsyncSession = Depends(get_db)
 
     # 4. Отправка
     try:
-        payload = {
-            "chat_id": ADMIN_CHAT_ID,
-            "text": msg_text,
-            "parse_mode": "HTML"
-        }
-        
-        # Если кнопки есть — прикрепляем их. Если нет — сообщение уходит просто текстом.
+        payload = {"chat_id": ADMIN_CHAT_ID, "text": msg_text, "parse_mode": "HTML"}
         if reply_markup:
             payload["reply_markup"] = reply_markup
-            
         requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json=payload, timeout=5)
     except Exception as e:
         print(f"Ошибка отправки в ТГ: {e}")
@@ -342,11 +341,20 @@ async def websocket_chat(websocket: WebSocket, session_token: str, db: AsyncSess
     await chat_manager.connect(websocket, session_token)
     try:
         while True:
-            # 3. Ждем сообщение
+            # Ждем сообщение
             data = await websocket.receive_text()
-            message_data = json.loads(data) # Ожидаем {"sender": "client", "text": "..."}
+            message_data = json.loads(data) 
             
-            # 4. Сохраняем в БД
+            # 👇 НОВАЯ МАГИЯ UX: Проверяем тип события 👇
+            if message_data.get("type") in ["typing", "read"]:
+                # Пересылаем статус (печатает или прочитал) собеседнику
+                await chat_manager.broadcast_to_session(session_token, {
+                    "type": message_data.get("type"),
+                    "sender": message_data.get("sender")
+                })
+                continue
+
+            # Старая логика: сохраняем РЕАЛЬНОЕ сообщение в БД
             new_msg = ChatMessage(
                 session_id=session.id,
                 sender=message_data.get("sender", "client"),
@@ -355,8 +363,9 @@ async def websocket_chat(websocket: WebSocket, session_token: str, db: AsyncSess
             db.add(new_msg)
             await db.commit()
             
-            # 5. Рассылаем всем в этой сессии (клиенту и менеджеру)
+            # Рассылаем всем готовое сообщение
             await chat_manager.broadcast_to_session(session_token, {
+                "type": "message", # Указываем, что это текст, а не анимация
                 "sender": new_msg.sender,
                 "text": new_msg.text,
                 "timestamp": new_msg.timestamp.strftime("%H:%M")
@@ -435,7 +444,6 @@ async def get_active_chats(authorization: str = Header(None), db: AsyncSession =
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Отсутствует токен")
     
-    # Расшифровываем токен (проверка)
     token = authorization.split(" ")[1]
     try:
         jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -445,14 +453,23 @@ async def get_active_chats(authorization: str = Header(None), db: AsyncSession =
     result = await db.execute(select(ChatSession).where(ChatSession.status == "open").order_by(ChatSession.created_at.desc()))
     sessions = result.scalars().all()
     
-    return [{
-        "session_token": s.session_token,
-        "name": s.user_name,
-        "phone": s.user_phone,
-        "time": s.created_at.strftime("%H:%M"),
-        "manager_id": s.manager_id,     # Добавили ID
-        "manager_name": s.manager_name  # Добавили Имя
-    } for s in sessions]
+    chat_list = []
+    for s in sessions:
+        # 👇 Считаем, сколько всего сообщений написал пациент в этом чате
+        msg_res = await db.execute(select(ChatMessage).where(ChatMessage.session_id == s.id, ChatMessage.sender == "client"))
+        client_msg_count = len(msg_res.scalars().all())
+        
+        chat_list.append({
+            "session_token": s.session_token,
+            "name": s.user_name,
+            "phone": s.user_phone,
+            "time": s.created_at.strftime("%H:%M"),
+            "manager_id": s.manager_id,
+            "manager_name": s.manager_name,
+            "msg_count": client_msg_count # <--- ПЕРЕДАЕМ ЭТУ ЦИФРУ В REACT
+        })
+        
+    return chat_list
 
 # 3. ПРИНЯТЬ ЧАТ В РАБОТУ
 @app.post("/api/manager/chats/{session_token}/accept")
