@@ -4,6 +4,7 @@ import uuid
 import asyncio
 import jwt
 import requests
+import sqlite3
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -356,7 +357,7 @@ async def websocket_chat(websocket: WebSocket, session_token: str, db: AsyncSess
                 continue
 
             # Сохраняем РЕАЛЬНОЕ сообщение клиента в БД
-            client_text = message_data.get("text", "")
+            client_text = message_data.get("text", "").strip()
             new_msg = ChatMessage(
                 session_id=session.id,
                 sender=message_data.get("sender", "client"),
@@ -577,6 +578,30 @@ async def get_all_chats_history(authorization: str = Header(None), db: AsyncSess
         "date": s.created_at.strftime("%d.%m.%Y"),
         "time": s.created_at.strftime("%H:%M")
     } for s in sessions]
+
+@app.delete("/api/admin/chats/{session_token}")
+async def delete_chat_archive(session_token: str, authorization: str = Header(None)):
+    # 1. Простая проверка токена (или твоя существующая логика проверки админа)
+    if not authorization:
+        raise HTTPException(status_code=401, detail="No token provided")
+    
+    conn = sqlite3.connect("gp33.db")
+    cursor = conn.cursor()
+    
+    try:
+        # 2. Удаляем сообщения этого чата
+        cursor.execute("DELETE FROM chat_messages WHERE session_id = (SELECT id FROM chat_sessions WHERE session_token = ?)", (session_token,))
+        
+        # 3. Удаляем саму сессию чата
+        cursor.execute("DELETE FROM chat_sessions WHERE session_token = ?", (session_token,))
+        
+        conn.commit()
+        return {"status": "success", "message": "Chat deleted from archive"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
 
 # Убедитесь, что папка для документов создается
 DOCS_DIR = os.path.join(UPLOADS_DIR, "docs")

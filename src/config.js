@@ -1,6 +1,6 @@
 // Автоматически определяем среду (разработка или бой)
 export const API_URL = import.meta.env.DEV
-  ? "http://localhost:8000"
+  ? "http://localhost:8001"
   : "https://almgp33.kz";
 
 // Делаем DOMAIN_URL динамическим, чтобы картинки тоже грузились откуда надо

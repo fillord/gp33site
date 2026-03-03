@@ -7,6 +7,8 @@ import {
   MessageSquare,
   CheckCircle,
   Clock,
+  LogOut,
+  Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { API_BASE_URL } from "../config";
@@ -20,6 +22,35 @@ export default function AdminChatHistory() {
   const navigate = useNavigate();
   const token = localStorage.getItem("manager_token");
   const role = localStorage.getItem("manager_role");
+
+  const handleLogout = () => {
+    localStorage.clear(); // Очищаем токен и роль
+    navigate("/manager/login"); // Перенаправляем на вход
+  };
+  const handleDeleteChat = async (sessionToken) => {
+    if (!window.confirm("Вы уверены, что хотите окончательно удалить этот чат из архива?")) return;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/chats/${sessionToken}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (res.ok) {
+        // Убираем чат из списка на экране
+        setChats(chats.filter((c) => c.session_token !== sessionToken));
+        if (selectedChat?.session_token === sessionToken) {
+          setSelectedChat(null);
+          setChatMessages([]);
+        }
+      } else {
+        alert("Ошибка при удалении чата");
+      }
+    } catch (err) {
+      console.error("Ошибка:", err);
+    }
+  };
+
   // Загружаем все чаты при открытии страницы
   useEffect(() => {
     // 1. ПРОВЕРКА БЕЗОПАСНОСТИ: Если нет токена ИЛИ роль не админ - выкидываем на логин
@@ -74,7 +105,14 @@ export default function AdminChatHistory() {
             Всего диалогов: {chats.length}
           </p>
         </div>
-
+        {/* КНОПКА ВЫХОДА */}
+        <button 
+          onClick={handleLogout}
+          className="p-2 hover:bg-gray-700 rounded-lg transition-colors text-gray-300 hover:text-white group"
+          title="Выйти из системы"
+        >
+          <LogOut size={22} className="group-hover:scale-110 transition-transform" />
+        </button>
         {/* Панель фильтров */}
         <div className="p-4 border-b bg-gray-50 flex flex-col gap-3">
           <div className="relative">
@@ -120,6 +158,19 @@ export default function AdminChatHistory() {
                   <Clock size={12} />
                   {chat.date} {chat.time}
                 </span>
+                {/* КНОПКА УДАЛЕНИЯ (появляется если чат закрыт) */}
+                {chat.status !== "open" && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation(); // Чтобы при клике на корзину не открывался сам чат
+                      handleDeleteChat(chat.session_token);
+                    }}
+                    className="text-gray-400 hover:text-red-500 transition-colors"
+                    title="Удалить архив"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
               </div>
               <div className="flex justify-between items-center text-sm">
                 <span className="text-gray-500 font-mono text-xs">
