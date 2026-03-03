@@ -470,7 +470,9 @@ async def show_list(update, category, title_ru):
             }.get(item.category, f"❓ {item.category}")
             
             # Добавил вывод телефона!
-            info += f"📌 Тип: {cat_text}\n📊 Статус: {status}\n👤 {item.name}\n📞 Тел: {item.phone}\n📝 {item.text[:100]}..."
+            # Мы убрали [:100] и три точки в конце
+            info += f"📌 Тип: {cat_text}\n📊 Статус: {status}\n👤 {item.name}\n📞 Тел: {item.phone}\n📝 {item.text}\n"
+            info += "------------------------\n"
                     
         # 👇 ФОРМИРОВАНИЕ КНОПОК ДЛЯ СПИСКА 👇
         keyboard = []

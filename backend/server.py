@@ -68,7 +68,7 @@ class FeedbackSchema(BaseModel):
     message: str
     category: Optional[str] = "Обращение"
 
-SECRET_KEY = "23862369789" # Секретный ключ для шифрования
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 
 class ManagerLoginSchema(BaseModel):
